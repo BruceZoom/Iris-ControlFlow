@@ -30,6 +30,11 @@
 \newcommand{\cseq}{\,;;\,}
 \newcommand{\creturn}{\texttt{return}\,}
 
+\newcommand{\tunit}{\texttt{unit}}
+\newcommand{\tint}{\texttt{int}}
+\newcommand{\tbool}{\texttt{bool}}
+\newcommand{\vtype}[1]{\textbf{V}[#1]}
+
 \newcommand{\pure}[1]{\text{pure}(#1)}
 \newcommand{\wellf}[1]{\text{well\_formed}(#1)}
 
@@ -150,6 +155,21 @@ $$
         \land &(v = \false \wand \wpre{e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R})
     \end{aligned} &\vdash \wpre{\cif v \cthen e_2 \celse e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-if)}
 \end{aligned}
+$$
+
+\paragraph{Typing}
+
+$$
+A, B \in \textit{Type} ::= \tunit \sep \tint \sep \tbool \sep A \rightarrow B
+$$
+
+\subparagraph{Syntactic Typing}
+
+
+\subparagraph{Semantic Typing}
+
+$$
+\Gamma \vDash e: A_N, A_B, A_C, A_R \triangleq \Gamma \vDash \htriple{\text{True}}{e}{\vtype{A_N}}{\vtype{A_B}}{\vtype{A_C}}{\vtype{A_R}}
 $$
 
 \end{document}
