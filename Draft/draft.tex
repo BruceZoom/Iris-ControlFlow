@@ -1,0 +1,147 @@
+\documentclass{article}
+\usepackage[UTF8]{ctex}
+\usepackage{color,amsmath,amssymb,graphicx,fancyhdr,amsfonts,amsthm,algorithmic,verbatim,bbold}
+\usepackage{algorithm,hyperref}
+\usepackage{mkolar_definitions}
+\usepackage{extpfeil}
+\usepackage{mathpartir}
+\usepackage{wasysym}
+\usepackage[mathscr]{eucal}
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{relsize}
+\usepackage[left=2cm,top=2cm,right=2cm]{geometry}
+\numberwithin{algorithm}{section}
+
+\newcommand{\doublebrackets}[1]{[\![ #1 ]\!]}
+\newcommand{\progspec}[1]{\{ #1 \}}
+\newcommand{\tuple}[1]{\langle #1 \rangle}
+
+\newcommand{\true}{\texttt{true}}
+\newcommand{\false}{\texttt{false}}
+\newcommand{\cref}{\texttt{ref}}
+\newcommand{\cfork}[1]{\texttt{fork}\{#1\}}
+\newcommand{\cloop}[1]{\texttt{loop}_{#1}\,}
+\newcommand{\cbreak}{\texttt{break}\,}
+\newcommand{\ccontinue}{\texttt{continue}}
+\newcommand{\cif}{\texttt{if}\,}
+\newcommand{\cthen}{\,\texttt{then}\,}
+\newcommand{\celse}{\,\texttt{else}\,}
+\newcommand{\cseq}{\,;;\,}
+
+\newcommand{\pure}[1]{\text{pure}(#1)}
+\newcommand{\wellf}[1]{\text{well\_formed}(#1)}
+
+\newcommand{\hred}{\rightarrow_h}
+\newcommand{\tred}{\rightarrow_t}
+\newcommand{\tpred}{\rightarrow_{tp}}
+\newcommand{\cred}{\text{red}}
+
+\newcommand{\wand}{-\mkern-8mu*\,}
+\newcommand{\upd}{\dot{|\mkern-8mu\Rrightarrow}\,}
+\newcommand{\later}{\triangleright}
+\newcommand{\wpre}[4]{\textsf{wp}\, #1\, \progspec{#2}\, \progspec{#3}\, \progspec{#4}}
+
+\newcommand{\sep}{\,|\,}
+
+\begin{document}
+
+\paragraph{The Programming Language}
+
+$$
+\begin{aligned}
+    v \in \textit{Val} ::=\, & () \sep z \sep \true \sep \false \sep l \sep \lambda x.e \sep \cdots \\
+    e \in \textit{Expr} ::=\, & v \sep x \sep e_1(e_2) \sep \cref(e) \sep !e \sep e_1 \leftarrow e_2 \sep \cfork{e} \sep e_1 \cseq e_2 \\
+                        \sep\, & \cloop{e} e \sep \cbreak e \sep \ccontinue \sep \cif e_1 \cthen e_2 \celse e_3 \sep \cdots \\
+    K \in \textit{Ctx} ::=\, & \bullet \sep K(e) \sep v(K) \sep \cref(K) \sep !K \sep K \leftarrow e \sep v \leftarrow K \sep K \cseq e \\
+                        \sep\, & \cloop{e} K \sep \cbreak K \sep \cif K \cthen e_2 \celse e_3 \sep \cdots
+\end{aligned}
+$$
+
+$$
+\texttt{loop}\, e \triangleq \cloop{e} e
+$$
+
+\paragraph{Reductions}
+
+\subparagraph{Head Reductions}
+
+$$
+\begin{aligned}
+    (\cloop{e} (), \sigma) &\hred (\cloop{e} e, \sigma, \epsilon) && \\
+    (\cloop{e} (\cbreak v), \sigma) &\hred (v, \sigma, \epsilon) && \\
+    (\cloop{e} (\ccontinue), \sigma) &\hred (\cloop{e} e, \sigma, \epsilon) &&  \\
+    (K[\cbreak v], \sigma) &\hred (\cbreak v, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\cbreak\!} \\
+    (K[\ccontinue], \sigma) &\hred (\ccontinue, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\ccontinue} \\
+    (\cif \true \cthen e_2 \celse e_3, \sigma) &\hred (e_2, \sigma, \epsilon) && \\
+    (\cif \false \cthen e_2 \celse e_3, \sigma) &\hred (e_3, \sigma, \epsilon) && \\
+    (v \cseq e, \sigma) &\hred (e, \sigma, \epsilon) && \\
+    (\cfork{e}, \sigma) &\hred ((), \sigma, e) && \text{if } \wellf{e} \\
+    &\cdots
+\end{aligned}
+$$
+
+where
+$$
+\begin{aligned}
+    \pure{\cbreak\!} &\triangleq \textit{Cxt}\,\backslash\cloop{e} \\
+    % \{K \sep \forall K_1, K_2. \text{ if } K = K_1[K_2] \text{ then } K_1 \neq \cloop{e} K_2 \text{ and } K_2 \in \pure{\cbreak\!}\} \\
+    \pure{\ccontinue} &\triangleq \textit{Cxt}\,\backslash\cloop{e} \\
+    % \{K \sep \forall K_1, K_2. \text{ if } K = K_1[K_2] \text{ then } K_1 \neq \cloop{e} K_2 \text{ and } K_2 \in \pure{\ccontinue}\} \\
+    \wellf{e} &\text{ iff. } % TODO: definition of well-definedness
+    \end{aligned}
+$$
+
+% \subparagraph{Thread Local Reductions}
+
+% $$
+% \begin{aligned}
+%     (K[e], \sigma) &\tred (K[e'], \sigma, \vec{e}_f) && \text{if } (e, \sigma) \hred (e', \sigma, \vec{e}_f)
+% \end{aligned}
+% $$
+
+The thread local reduction ($\tred$) and thread-pool reduction ($\tpred$) are identical to the original ones.
+
+% There is a small problem that the expression need to terminate after \cbreak{} and \ccontinue{}, otherwise the evaluation gets stuck.
+
+\paragraph{Weakest Precondition}
+
+$$
+\begin{aligned}
+    \wpre{e}{\Phi_N}{\Phi_B}{\Phi_C} \triangleq& \quad
+           (e \in \textit{Val} \land \upd \Phi_N(e)) \\
+    & \lor (e = \cbreak v \land \upd \Phi_B(v)) \\
+    & \lor (e = \ccontinue \land \upd \Phi_C()) \\
+    & \lor \biggl(\forall \sigma. \cred(e) \land S(\sigma) \wand \upd \bigl(\cred(e, \sigma) \\
+    & \quad \land \later
+        \forall e', \sigma', \vec{e}_f. \bigl((e, \sigma) \tred (e', \sigma', \vec{e}_f)\bigr) \wand \upd \\
+    & \quad\quad\quad \bigl(S(\sigma') * \wpre{e'}{\Phi_N}{\Phi_B}{\Phi_C} * \varhexstar_{e'\in\vec{e}_f} \wpre{e'}{\top}{\bot}{\bot} \bigr)\bigr)\biggr)
+\end{aligned}
+$$
+
+$$
+\cred(e) \triangleq e \notin \textit{Val}\, \cup \{\cbreak v, \ccontinue\}
+$$
+
+\paragraph{Rules for weakest preconditions}
+
+$$
+\begin{aligned}
+    \Phi_B(v) &\vdash \wpre{\cbreak v}{\bot}{\Phi_B}{\bot} & \textsc{(wp-break)} \\
+    \Phi_C() &\vdash \wpre{\ccontinue}{\bot}{\bot}{\Phi_C} & \textsc{(wp-continue)} \\
+    \Box(I \wand{}\, \wpre{e}{\_. I}{\Phi_B}{\_. I}) * I &\vdash \wpre{(\cloop{e}e)}{\Phi_B}{\bot}{\bot} & \textsc{(wp-loop)} \\
+    \begin{aligned}
+        \texttt{wp}\,e\,& \progspec{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}} \\
+                        & \progspec{v. K \in \pure{\cbreak\!} \land \Phi_B(v)} \\
+                        & \progspec{v. K \in \pure{\ccontinue} \land \Phi_C(v)}
+    \end{aligned} &\vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C} & \textsc{(wp-bind)} \\
+    % \wpre{e}{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}}{\bot}{\bot} &\vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C} & \textsc{(wp-bind-normal)} \\
+    % K\in\pure{\cbreak\!} \land \wpre{e}{\bot}{\Phi_B}{\bot} &\vdash \wpre{K[e]}{\bot}{\Phi_B}{\bot} & \textsc{(wp-bind-break)} \\
+    \begin{aligned}
+        &(v = \true \wand \wpre{e_2}{\Phi_N}{\Phi_B}{\Phi_C}) \\
+        \land &(v = \false \wand \wpre{e_3}{\Phi_N}{\Phi_B}{\Phi_C})
+    \end{aligned} &\vdash \wpre{\cif v \cthen e_2 \celse e_3}{\Phi_N}{\Phi_B}{\Phi_C} & \textsc{(wp-if)}
+\end{aligned}
+$$
+
+\end{document}
