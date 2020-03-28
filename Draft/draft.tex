@@ -28,6 +28,7 @@
 \newcommand{\cthen}{\,\texttt{then}\,}
 \newcommand{\celse}{\,\texttt{else}\,}
 \newcommand{\cseq}{\,;;\,}
+\newcommand{\creturn}{\texttt{return}\,}
 
 \newcommand{\pure}[1]{\text{pure}(#1)}
 \newcommand{\wellf}[1]{\text{well\_formed}(#1)}
@@ -40,7 +41,8 @@
 \newcommand{\wand}{-\mkern-8mu*\,}
 \newcommand{\upd}{\dot{|\mkern-8mu\Rrightarrow}\,}
 \newcommand{\later}{\triangleright}
-\newcommand{\wpre}[4]{\textsf{wp}\, #1\, \progspec{#2}\, \progspec{#3}\, \progspec{#4}}
+\newcommand{\wpre}[5]{\textsf{wp}\, #1\, \progspec{#2}\, \progspec{#3}\, \progspec{#4}\, \progspec{#5}}
+\newcommand{\htriple}[6]{\progspec{#1}\, #2\, \progspec{#3}\, \progspec{#4}\, \progspec{#5}\, \progspec{#6}}
 
 \newcommand{\sep}{\,|\,}
 
@@ -51,10 +53,10 @@
 $$
 \begin{aligned}
     v \in \textit{Val} ::=\, & () \sep z \sep \true \sep \false \sep l \sep \lambda x.e \sep \cdots \\
-    e \in \textit{Expr} ::=\, & v \sep x \sep e_1(e_2) \sep \cref(e) \sep !e \sep e_1 \leftarrow e_2 \sep \cfork{e} \sep e_1 \cseq e_2 \\
-                        \sep\, & \cloop{e} e \sep \cbreak e \sep \ccontinue \sep \cif e_1 \cthen e_2 \celse e_3 \sep \cdots \\
+    e \in \textit{Expr} ::=\, & v \sep x \sep e_1(e_2) \sep \cref(e) \sep !e \sep e_1 \leftarrow e_2 \sep \cfork{e} \sep e_1 \cseq e_2 \sep \cloop{e} e \\
+                        \sep\, & \cif e_1 \cthen e_2 \celse e_3 \sep \cbreak e \sep \ccontinue \sep \creturn e \sep \cdots \\
     K \in \textit{Ctx} ::=\, & \bullet \sep K(e) \sep v(K) \sep \cref(K) \sep !K \sep K \leftarrow e \sep v \leftarrow K \sep K \cseq e \\
-                        \sep\, & \cloop{e} K \sep \cbreak K \sep \cif K \cthen e_2 \celse e_3 \sep \cdots
+                        \sep\, & \cloop{e} K \sep \cif K \cthen e_2 \celse e_3 \sep \cbreak K \sep \creturn K \sep \cdots
 \end{aligned}
 $$
 
@@ -73,6 +75,7 @@ $$
     (\cloop{e} (\ccontinue), \sigma) &\hred (\cloop{e} e, \sigma, \epsilon) &&  \\
     (K[\cbreak v], \sigma) &\hred (\cbreak v, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\cbreak\!} \\
     (K[\ccontinue], \sigma) &\hred (\ccontinue, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\ccontinue} \\
+    (K[\creturn v], \sigma) &\hred (\creturn v, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\creturn\!} \\
     (\cif \true \cthen e_2 \celse e_3, \sigma) &\hred (e_2, \sigma, \epsilon) && \\
     (\cif \false \cthen e_2 \celse e_3, \sigma) &\hred (e_3, \sigma, \epsilon) && \\
     (v \cseq e, \sigma) &\hred (e, \sigma, \epsilon) && \\
@@ -87,20 +90,22 @@ $$
     \pure{\cbreak\!} &\triangleq \textit{Cxt}\,\backslash\cloop{e} \\
     % \{K \sep \forall K_1, K_2. \text{ if } K = K_1[K_2] \text{ then } K_1 \neq \cloop{e} K_2 \text{ and } K_2 \in \pure{\cbreak\!}\} \\
     \pure{\ccontinue} &\triangleq \textit{Cxt}\,\backslash\cloop{e} \\
+    \pure{\creturn\!} &\triangleq \textit{Cxt} \\
     % \{K \sep \forall K_1, K_2. \text{ if } K = K_1[K_2] \text{ then } K_1 \neq \cloop{e} K_2 \text{ and } K_2 \in \pure{\ccontinue}\} \\
     \wellf{e} &\text{ iff. } % TODO: definition of well-definedness
     \end{aligned}
 $$
 
-% \subparagraph{Thread Local Reductions}
+\subparagraph{Thread Local Reductions}
 
-% $$
-% \begin{aligned}
-%     (K[e], \sigma) &\tred (K[e'], \sigma, \vec{e}_f) && \text{if } (e, \sigma) \hred (e', \sigma, \vec{e}_f)
-% \end{aligned}
-% $$
+$$
+\begin{aligned}
+    (K[e], \sigma) &\tred (K[e'], \sigma, \vec{e}_f) && \text{if } (e, \sigma) \hred (e', \sigma, \vec{e}_f) \\
+    (\creturn v, \sigma) &\tred (v, \sigma, \epsilon)
+\end{aligned}
+$$
 
-The thread local reduction ($\tred$) and thread-pool reduction ($\tpred$) are identical to the original ones.
+The thread-pool reduction ($\tpred$) is identical to the original one.
 
 % There is a small problem that the expression need to terminate after \cbreak{} and \ccontinue{}, otherwise the evaluation gets stuck.
 
@@ -108,39 +113,42 @@ The thread local reduction ($\tred$) and thread-pool reduction ($\tpred$) are id
 
 $$
 \begin{aligned}
-    \wpre{e}{\Phi_N}{\Phi_B}{\Phi_C} \triangleq& \quad
+    \wpre{e}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} \triangleq& \quad
            (e \in \textit{Val} \land \upd \Phi_N(e)) \\
     & \lor (e = \cbreak v \land \upd \Phi_B(v)) \\
     & \lor (e = \ccontinue \land \upd \Phi_C()) \\
+    & \lor (e = \creturn v \land \upd \Phi_R(v)) \\
     & \lor \biggl(\forall \sigma. \cred(e) \land S(\sigma) \wand \upd \bigl(\cred(e, \sigma) \\
     & \quad \land \later
         \forall e', \sigma', \vec{e}_f. \bigl((e, \sigma) \tred (e', \sigma', \vec{e}_f)\bigr) \wand \upd \\
-    & \quad\quad\quad \bigl(S(\sigma') * \wpre{e'}{\Phi_N}{\Phi_B}{\Phi_C} * \varhexstar_{e'\in\vec{e}_f} \wpre{e'}{\top}{\bot}{\bot} \bigr)\bigr)\biggr)
+    & \quad\quad\quad \bigl(S(\sigma') * \wpre{e'}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} * \varhexstar_{e'\in\vec{e}_f} \wpre{e'}{\top}{\bot}{\bot}{\top} \bigr)\bigr)\biggr)
 \end{aligned}
 $$
 
 $$
-\cred(e) \triangleq e \notin \textit{Val}\, \cup \{\cbreak v, \ccontinue\}
+\cred(e) \triangleq e \notin \textit{Val}\, \cup \{\cbreak v, \ccontinue, \creturn v\}
 $$
 
 \paragraph{Rules for weakest preconditions}
 
 $$
 \begin{aligned}
-    \Phi_B(v) &\vdash \wpre{\cbreak v}{\bot}{\Phi_B}{\bot} & \textsc{(wp-break)} \\
-    \Phi_C() &\vdash \wpre{\ccontinue}{\bot}{\bot}{\Phi_C} & \textsc{(wp-continue)} \\
-    \Box(I \wand{}\, \wpre{e}{\_. I}{\Phi_B}{\_. I}) * I &\vdash \wpre{(\cloop{e}e)}{\Phi_B}{\bot}{\bot} & \textsc{(wp-loop)} \\
+    \Phi_B(v) &\vdash \wpre{\cbreak v}{\bot}{\Phi_B}{\bot}{\bot} & \textsc{(wp-break)} \\
+    \Phi_C() &\vdash \wpre{\ccontinue}{\bot}{\bot}{\Phi_C}{\bot} & \textsc{(wp-continue)} \\
+    \Phi_R(v) &\vdash \wpre{\creturn v}{\bot}{\bot}{\bot}{\Phi_R} & \textsc{(wp-return)} \\
+    \Box(I \wand{}\, \wpre{e}{\_. I}{\Phi_B}{\_. I}{\Phi_R}) * I &\vdash \wpre{(\cloop{e}e)}{\Phi_B}{\bot}{\bot}{\Phi_R} & \textsc{(wp-loop)} \\
     \begin{aligned}
-        \texttt{wp}\,e\,& \progspec{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}} \\
+        \texttt{wp}\,e\,& \progspec{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}} \\
                         & \progspec{v. K \in \pure{\cbreak\!} \land \Phi_B(v)} \\
-                        & \progspec{v. K \in \pure{\ccontinue} \land \Phi_C(v)}
-    \end{aligned} &\vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C} & \textsc{(wp-bind)} \\
+                        & \progspec{v. K \in \pure{\ccontinue} \land \Phi_C(v)} \\
+                        & \progspec{v. K \in \pure{\creturn\!} \land \Phi_R(v)}
+    \end{aligned} &\vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-bind)} \\
     % \wpre{e}{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}}{\bot}{\bot} &\vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C} & \textsc{(wp-bind-normal)} \\
     % K\in\pure{\cbreak\!} \land \wpre{e}{\bot}{\Phi_B}{\bot} &\vdash \wpre{K[e]}{\bot}{\Phi_B}{\bot} & \textsc{(wp-bind-break)} \\
     \begin{aligned}
-        &(v = \true \wand \wpre{e_2}{\Phi_N}{\Phi_B}{\Phi_C}) \\
-        \land &(v = \false \wand \wpre{e_3}{\Phi_N}{\Phi_B}{\Phi_C})
-    \end{aligned} &\vdash \wpre{\cif v \cthen e_2 \celse e_3}{\Phi_N}{\Phi_B}{\Phi_C} & \textsc{(wp-if)}
+        &(v = \true \wand \wpre{e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}) \\
+        \land &(v = \false \wand \wpre{e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R})
+    \end{aligned} &\vdash \wpre{\cif v \cthen e_2 \celse e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-if)}
 \end{aligned}
 $$
 
