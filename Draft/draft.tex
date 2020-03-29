@@ -29,6 +29,7 @@
 \newcommand{\celse}{\,\texttt{else}\,}
 \newcommand{\cseq}{\,;;\,}
 \newcommand{\creturn}{\texttt{return}\,}
+\newcommand{\ccall}{\texttt{call}\,}
 
 \newcommand{\tunit}{\texttt{unit}}
 \newcommand{\tint}{\texttt{int}}
@@ -134,6 +135,8 @@ $$
 \cred(e) \triangleq e \notin \textit{Val}\, \cup \{\cbreak v, \ccontinue, \creturn v\}
 $$
 
+The adequacy theorem will have some problem w.r.t the \creturn statement.
+
 \paragraph{Rules for weakest preconditions}
 
 $$
@@ -157,14 +160,63 @@ $$
 \end{aligned}
 $$
 
+Return conditions should be merged with normal conditions upon calling the function.
+
 \paragraph{Typing}
 
 $$
-A, B \in \textit{Type} ::= \tunit \sep \tint \sep \tbool \sep A \rightarrow B
+A, B \in \textit{Type} ::= \epsilon \sep \tunit \sep \tint \sep \tbool \sep A \rightarrow B \sep \cdots
 $$
 
 \subparagraph{Syntactic Typing}
 
+$$
+    \Gamma \vdash e: A_N, A_B, A_C, A_R
+$$
+
+\begin{mathpar}
+    \inferrule*[left=type-break]{
+        \Gamma \vdash e: A_N, A_B, A_C, A_R
+    }{
+        \Gamma \vdash \cbreak e: \epsilon, A_N + A_B, A_C, A_R
+    }
+    \and
+    \inferrule*[left=type-continue]{}{
+        \Gamma \vdash \ccontinue: \epsilon, \epsilon, \tunit, \epsilon
+    }
+    \and
+    \inferrule*[left=type-return]{
+        \Gamma \vdash e: A_N, A_B, A_C, A_R
+    }{
+        \Gamma \vdash \creturn e: \epsilon, A_B, A_C, A_N + A_R
+    }
+    \and
+    \inferrule*[left=type-loop]{
+        \Gamma \vdash e: \tunit, A_B, \tunit, A_R
+    }{
+        \Gamma \vdash \cloop{e} e: A_B, \epsilon, \epsilon, A_R
+    }
+    \and
+    \inferrule*[left=type-apply]{
+        \Gamma \vdash e_1: A_N \rightarrow (A_N', A_B', A_C', A_R') \and
+        \Gamma \vdash e_2: A_N, A_B, A_C, A_R
+    }{
+        \Gamma \vdash e_1(e_2): A_N', A_B + A_B', A_C + A_C', A_R + A_R'
+    }
+\end{mathpar}
+
+where
+
+$$
+\begin{aligned}
+    A + B &\triangleq \begin{cases}
+        A & \text{if } B = \epsilon \text{ or } A = B \\
+        B & \text{if } A = \epsilon \text{ or } A = B \\
+        \text{undefined} & \text{otherwise}
+    \end{cases} \\
+    A \rightarrow (B_1, B_2, \cdots) &\triangleq A \rightarrow B_1, A \rightarrow B_2, \cdots
+\end{aligned}
+$$
 
 \subparagraph{Semantic Typing}
 
