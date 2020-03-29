@@ -60,15 +60,18 @@ $$
 \begin{aligned}
     v \in \textit{Val} ::=\, & () \sep z \sep \true \sep \false \sep l \sep \lambda x.e \sep \cdots \\
     e \in \textit{Expr} ::=\, & v \sep x \sep e_1(e_2) \sep \cref(e) \sep !e \sep e_1 \leftarrow e_2 \sep \cfork{e} \sep e_1 \cseq e_2 \sep \cloop{e} e \\
-                        \sep\, & \cif e_1 \cthen e_2 \celse e_3 \sep \cbreak e \sep \ccontinue \sep \creturn e \sep \cdots \\
-    K \in \textit{Ctx} ::=\, & \bullet \sep K(e) \sep v(K) \sep \cref(K) \sep !K \sep K \leftarrow e \sep v \leftarrow K \sep K \cseq e \\
-                        \sep\, & \cloop{e} K \sep \cif K \cthen e_2 \celse e_3 \sep \cbreak K \sep \creturn K \sep \cdots
+                        \sep\, & \cif e_1 \cthen e_2 \celse e_3 \sep \cbreak e \sep \ccontinue \sep \ccall e \sep \creturn e \sep \cdots \\
+    K \in \textit{Ctx} ::=\, & \bullet \sep K(e) \sep v(K) \sep \cref(K) \sep !K \sep K \leftarrow e \sep v \leftarrow K \sep K \cseq e \sep \cloop{e} K \\
+                        \sep\, & \cif K \cthen e_2 \celse e_3 \sep \cbreak K \sep \ccall K \sep \creturn K \sep \cdots
 \end{aligned}
 $$
 
 $$
 \texttt{loop}\, e \triangleq \cloop{e} e
 $$
+
+$\cbreak\!$ and $\ccontinue$ can not penetrate $\cloop{e}\!$, and $\creturn\!$ can not penetrate $\ccall\!$.
+% A problem, $(\lambda x. \creturn x)(1) \cseq 3$ should evaluate to 1 or 3? In other words, whether the lambda expression is a function or a normal expression?
 
 \paragraph{Reductions}
 
@@ -81,6 +84,8 @@ $$
     (\cloop{e} (\ccontinue), \sigma) &\hred (\cloop{e} e, \sigma, \epsilon) &&  \\
     (K[\cbreak v], \sigma) &\hred (\cbreak v, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\cbreak\!} \\
     (K[\ccontinue], \sigma) &\hred (\ccontinue, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\ccontinue} \\
+    (\ccall v, \sigma) &\hred (v, \sigma, \epsilon) \\
+    (\ccall (\creturn v), \sigma) &\hred (v, \sigma, \epsilon) \\
     (K[\creturn v], \sigma) &\hred (\creturn v, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\creturn\!} \\
     (\cif \true \cthen e_2 \celse e_3, \sigma) &\hred (e_2, \sigma, \epsilon) && \\
     (\cif \false \cthen e_2 \celse e_3, \sigma) &\hred (e_3, \sigma, \epsilon) && \\
@@ -93,10 +98,10 @@ $$
 where
 $$
 \begin{aligned}
-    \pure{\cbreak\!} &\triangleq \textit{Cxt}\,\backslash\cloop{e} \\
+    \pure{\cbreak\!} &\triangleq \textit{Cxt}\,\backslash\cloop{e}\backslash\ccall \\
     % \{K \sep \forall K_1, K_2. \text{ if } K = K_1[K_2] \text{ then } K_1 \neq \cloop{e} K_2 \text{ and } K_2 \in \pure{\cbreak\!}\} \\
-    \pure{\ccontinue} &\triangleq \textit{Cxt}\,\backslash\cloop{e} \\
-    \pure{\creturn\!} &\triangleq \textit{Cxt} \\
+    \pure{\ccontinue} &\triangleq \textit{Cxt}\,\backslash\cloop{e}\backslash\ccall \\
+    \pure{\creturn\!} &\triangleq \textit{Cxt}\,\backslash\ccall \\
     % \{K \sep \forall K_1, K_2. \text{ if } K = K_1[K_2] \text{ then } K_1 \neq \cloop{e} K_2 \text{ and } K_2 \in \pure{\ccontinue}\} \\
     \wellf{e} &\text{ iff. } % TODO: definition of well-definedness
     \end{aligned}
@@ -107,7 +112,7 @@ $$
 $$
 \begin{aligned}
     (K[e], \sigma) &\tred (K[e'], \sigma, \vec{e}_f) && \text{if } (e, \sigma) \hred (e', \sigma, \vec{e}_f) \\
-    (\creturn v, \sigma) &\tred (v, \sigma, \epsilon)
+    % (\creturn v, \sigma) &\tred (v, \sigma, \epsilon)
 \end{aligned}
 $$
 
@@ -135,7 +140,7 @@ $$
 \cred(e) \triangleq e \notin \textit{Val}\, \cup \{\cbreak v, \ccontinue, \creturn v\}
 $$
 
-The adequacy theorem will have some problem w.r.t the \creturn statement.
+% The adequacy theorem will have some problem w.r.t the \creturn statement.
 
 \paragraph{Rules for weakest preconditions}
 
@@ -156,11 +161,12 @@ $$
     \begin{aligned}
         &(v = \true \wand \wpre{e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}) \\
         \land &(v = \false \wand \wpre{e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R})
-    \end{aligned} &\vdash \wpre{\cif v \cthen e_2 \celse e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-if)}
+    \end{aligned} &\vdash \wpre{\cif v \cthen e_2 \celse e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-if)} \\
+    \wpre{e}{\Phi_N}{\bot}{\bot}{\Phi_R} &\vdash \wpre{\ccall e}{\Phi_N \lor \Phi_R}{\bot}{\bot}{\bot} & \textsc{(wp-call)}
 \end{aligned}
 $$
 
-Return conditions should be merged with normal conditions upon calling the function.
+% Return conditions should be merged with normal conditions upon calling the function.
 
 \paragraph{Typing}
 
