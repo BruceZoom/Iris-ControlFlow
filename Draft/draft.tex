@@ -54,6 +54,9 @@
 
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
 
+
+% \title{Draft of Iris with Control Flow}
+
 \begin{document}
 
 \section{The Programming Language}
@@ -82,7 +85,15 @@ We also consider control flow related to function invocations.
 To the resolve the problem of whether the $\creturn\!$ statement can penetrate unnamed functions defined with the $\lambda$ operator (e.g. which one of 1 and 2 should $(\lambda x. \creturn x)(1) \cseq 2$ evaluate to), we use $\ccall\!$ to scope the influence of $\creturn\!$.
 We can still define recursive functions in lambda calculus with the $\creturn\!$ functioning properly.
 
-\todo{Probabily an example}
+Following is an example defining the factorial function, where we early return 1 when $n$ is 0 and follows it by an invocation to $f$ recursively. The expression $\ccall (\textit{FACT}(n))$ would return the value of $n!$.
+Removing $\ccall\!$ in this definition will cause the evaluation of $\textit{FACT}(n)$ always goes into $\creturn 1$.
+$$
+\begin{aligned}
+    \textit{FACT}' &\triangleq \lambda f. \lambda n. (\cif n = 0 \cthen \creturn 1) \cseq n \times (\ccall (f\, f\, (n - 1))) \\
+    \textit{FACT} &\triangleq \textit{FACT}'\,\textit{FACT}'
+\end{aligned}
+$$
+% \todo{Probabily an example}
 
 % $\cbreak\!$ and $\ccontinue$ can not penetrate $\cloop{e}\!$, and $\creturn\!$ can not penetrate $\ccall\!$.
 % A problem, $(\lambda x. \creturn x)(1) \cseq 3$ should evaluate to 1 or 3? In other words, whether the lambda expression is a function or a normal expression?
@@ -278,8 +289,9 @@ We mainly demonstrate rules related to the control flow and binding.
     In the weakest precondition of inner expression $e$, the normal postconditions is simply the weakest precondition for the remaining context $K$.
     The postconditions for other exit kind is more interesting. Taking $\cbreak\!$ for example, the postcondition says the remaining context $K$ is penetrable by $\cbreak\!$ and the overall break condition $\Phi_B$ holds. \begin{itemize}
         \item If $K$ is penetrable, then the $\cbreak\!$ inside $e$ can also break the control flow in $K$. Thus the break postconditions of $e$ and $K[e]$ should be the same.
-        \item If $K$ is impenetrable, then the $\cbreak\!$ inside $e$ is scoped by some $\cloop{e}\!$ in $K$. Therefore, we should forbid the break condition of $e$ to affect the break condition of $K[e]$ (which is determined by statements outside the $\cloop{e}\!$ in $K$) by evaluating $K \in \pure{\cbreak\!}$ and entire break condition to $\bot$.
-        \item In the second case, to consider the break condition of $e$ properly, we should use \textsc{wp-bind} to bind the context outside the loop and apply \textsc{wp-loop} to the entire loop containing $e$.
+        \item If $K$ is impenetrable, then the $\cbreak\!$ inside $e$ is scoped by some $\cloop{e}\!$ in $K$. Therefore, we should forbid the break condition of $e$ to affect the break condition of $K[e]$ (which is determined by statements outside the $\cloop{e}\!$ in $K$) by evaluating $K \in \pure{\cbreak\!}$ and the entire break condition to $\bot$.
+        Consequently, the weakest precondition in the premise is invalidated (because $e$ actually have a break condition).
+        \item In the second case, to handle the break condition of $e$ properly, we should use \textsc{wp-bind} to bind the context outside the loop and apply \textsc{wp-loop} to the entire loop containing $e$.
     \end{itemize}
 \end{itemize}
 
@@ -293,65 +305,116 @@ A, B \in \textit{Type} ::= \tau \sep \tunit \sep \tint \sep \tbool \sep A \right
 $$
 With multiple control flow exits, we should type the result of all possible exits for an expression.
 The $\tau$ represents any type, and if some exit is impossible for an expression (e.g. normal exit for $\cbreak\!$), we should type the result of corresponding exit as $\tau$.
-It has the following property:
-$$
-\forall A \in \textit{Type}. \tau = A
-$$
+% It has the following property, and we can always rewrite $\tau$ to any concrete type.
+% $$
+% \forall A \in \textit{Type}. \tau = A
+% $$
 
-\subparagraph{Syntactic Typing}
+\subsection{Syntactic Typing}
 
+We first define the notation for syntactic type as:
 $$
     \Gamma \vdash e: A_N, A_B, A_C, A_R
 $$
 
+It states that given type assignment $\Gamma$, the type of the normal, break, continue, and return exit results for expression $e$ are respective $A_N$, $A_B$, $A_C$, and $A_R$.
+
+If the type is $\tau$, then the expression evaluation will not terminate through the corresponding exit and we can type $\tau$ to any type.
+In other words, we have the following rule for any type $A$.
 \begin{mathpar}
-    \inferrule*[left=type-break]{
-        \Gamma \vdash e: A_N, A_B, A_C, A_R
+    \inferrule*[left=$\tau$-normal]{
+        \Gamma \vdash e: \tau, A_B, A_C, A_R
     }{
-        \Gamma \vdash \cbreak e: \epsilon, A_N + A_B, A_C, A_R
-    }
-    \and
-    \inferrule*[left=type-continue]{}{
-        \Gamma \vdash \ccontinue: \epsilon, \epsilon, \tunit, \epsilon
-    }
-    \and
-    \inferrule*[left=type-return]{
-        \Gamma \vdash e: A_N, A_B, A_C, A_R
-    }{
-        \Gamma \vdash \creturn e: \epsilon, A_B, A_C, A_N + A_R
-    }
-    \and
-    \inferrule*[left=type-loop]{
-        \Gamma \vdash e: \tunit, A_B, \tunit, A_R
-    }{
-        \Gamma \vdash \cloop{e} e: A_B, \epsilon, \epsilon, A_R
-    }
-    \and
-    \inferrule*[left=type-apply]{
-        \Gamma \vdash e_1: A_N \rightarrow (A_N', A_B', A_C', A_R') \and
-        \Gamma \vdash e_2: A_N, A_B, A_C, A_R
-    }{
-        \Gamma \vdash e_1(e_2): A_N', A_B + A_B', A_C + A_C', A_R + A_R'
+        \Gamma \vdash e: A, A_B, A_C, A_R
     }
 \end{mathpar}
+Similar rules hold for the break type, continue type, and return type.
+In the construction of some typing proof tree, we can either select to convert $\tau$ to some other type to match the premise of other rules, or carry $\tau$ into types in the conclusion.
 
-where
+\begin{figure}[h]
+    \begin{mathpar}
+        \inferrule*[left=type-break]{
+            \Gamma \vdash e: A_B, A_B, A_C, A_R
+        }{
+            \Gamma \vdash \cbreak e: \tau, A_B, A_C, A_R
+        }
+        \and
+        \inferrule*[left=type-continue]{}{
+            \Gamma \vdash \ccontinue: \tau, \tau, \tunit, \tau
+        }
+        \and
+        \inferrule*[left=type-return]{
+            \Gamma \vdash e: A_R, A_B, A_C, A_R
+        }{
+            \Gamma \vdash \creturn e: \tau, A_B, A_C, A_R
+        }\\
+        \and
+        \inferrule*[left=type-loop]{
+            \Gamma \vdash e: \tunit, A_B, \tunit, A_R
+        }{
+            \Gamma \vdash \cloop{e} e: A_B, \tau, \tau, A_R
+        }
+        \and
+        \inferrule*[left=type-call]{
+            \Gamma \vdash e: A_R, \tau, \tau, A_R
+        }{
+            \Gamma \vdash \ccall e: A_R, \tau, \tau, \tau
+        }
+        \and
+        \inferrule*[left=type-seq]{
+            \Gamma \vdash e_1: A_N', A_B, A_C, A_R \and
+            \Gamma \vdash e_2: A_N, A_B, A_C, A_R
+        }{
+            \Gamma \vdash e_1 \cseq e_2: A_N, A_B, A_C, A_R
+        }
+        \and
+        \inferrule*[left=type-if]{
+            \Gamma \vdash e_1: \tbool, A_B, A_C, A_R \and
+            \Gamma \vdash e_2: A_N, A_B, A_C, A_R \and
+            \Gamma \vdash e_3: A_N, A_B, A_C, A_R
+        }{
+            \Gamma \vdash \cif e_1 \cthen e_2 \celse e_3: A_N, A_B, A_C, A_R
+        }
+        \and
+        \inferrule*[left=type-apply]{
+            \Gamma \vdash e_1: A_N' \rightarrow (A_N, A_B, A_C, A_R) \and
+            \Gamma \vdash e_2: A_N', A_B, A_C, A_R
+        }{
+            \Gamma \vdash e_1(e_2): A_N, A_B, A_C, A_R
+        }
+    \end{mathpar} 
+    $$
+        \text{where } A \rightarrow (B_1, B_2, \cdots) \triangleq A \rightarrow B_1, A \rightarrow B_2, \cdots
+    $$
+    \caption{Some Typing Rules}
+    \label{fig:type-rule}
+\end{figure}
 
-$$
-\begin{aligned}
-    A + B &\triangleq \begin{cases}
-        A & \text{if } B = \epsilon \text{ or } A = B \\
-        B & \text{if } A = \epsilon \text{ or } A = B \\
-        \text{undefined} & \text{otherwise}
-    \end{cases} \\
-    A \rightarrow (B_1, B_2, \cdots) &\triangleq A \rightarrow B_1, A \rightarrow B_2, \cdots
-\end{aligned}
-$$
+Figure~\ref{fig:type-rule} shows some typing rules related to control flows and expression application.
+\begin{itemize}
+    \item First three rule types three new terminal expressions. Notice that we could have nested break/continue/return structures in $\cbreak\!$ and $\creturn\!$ expressions. The continue type of any expression will always be $\tunit$ in this language, but we still use a variable $A_C$ to represent it in most cases.
+    \item In \textsc{type-loop} rule, The break type of the loop body is converted into normal type of the loop. We require the normal type and continue type of the loop body to be $\tunit$, which is necessary in the Rust language.
+    \item In \textsc{type-call} rule, the normal type and return type of function body should agree. Also, the function body should have $\tau$ as its break type and continue type to guarantee well-formedness.
+    \item \textsc{type-seq} and \textsc{type-if} rules are straight forward, where break type, continue type, and return type of expressions should agree respectively.
+    \item The \textsc{type-apply} rule, in contrast to \textsc{type-call}, allow the control flow types ($A_C, A_B, A_R$) in the lambda term $e_1$ to be exposed after the application.
+\end{itemize}
 
-\subparagraph{Semantic Typing}
+% $$
+% \begin{aligned}
+%     A + B &\triangleq \begin{cases}
+%         A & \text{if } B = \epsilon \text{ or } A = B \\
+%         B & \text{if } A = \epsilon \text{ or } A = B \\
+%         \text{undefined} & \text{otherwise}
+%     \end{cases} \\
+% \end{aligned}
+% $$
 
+\subsection{Semantic Typing}
+
+We can also do semantic typing for the language, and with the definition of weakest precondition, we can easily derive the following definition.
 $$
 \Gamma \vDash e: A_N, A_B, A_C, A_R \triangleq \Gamma \vDash \htriple{\text{True}}{e}{\vtype{A_N}}{\vtype{A_B}}{\vtype{A_C}}{\vtype{A_R}}
 $$
+This definition is quite informal with some notation abuse, but its meaning and some skipped notation definitions are similar to those in the Tutorial on Proving Semantic Type Soundness in Iris.
 
 \end{document}
