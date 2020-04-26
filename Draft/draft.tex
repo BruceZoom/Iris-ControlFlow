@@ -101,7 +101,7 @@ $$
 \section{Operational Semantics}
 
 We then define the operational semantics of the language.
-We mainly work on the head reduction ($\hred$), and the thread local reduction ($\tred$) and thread-pool reduction ($\tpred$) are identical to the original ones.
+% We mainly work on the head reduction ($\hred$), and the thread local reduction ($\tred$) and thread-pool reduction ($\tpred$) are identical to the original ones.
 
 \begin{figure}[h]
 $$
@@ -117,7 +117,7 @@ $$
 \label{fig:hred-loop}
 \end{figure}
 
-Figure~\ref{fig:hred-loop} shows the head reduction for $\cloop{e}\!$, $\cbreak\!$, and $\ccontinue$.
+Figure~\ref{fig:hred-loop} shows head reductions for $\cloop{e}\!$, $\cbreak\!$, and $\ccontinue$.
 \begin{itemize}
 \item The first two rules says that when the evaluation of the loop body finishes (must evaluate to the unit) or it encounters a $\ccontinue$, it reset the expression in the hole to $e$, the complete loop body.
 \item The third rule says when the loop encounters a $\cbreak\!$ in the hole, the evaluation for the entire loop finishes with the value carried by $\cbreak\!$ as its result.
@@ -179,7 +179,7 @@ $$
 Figure~\ref{fig:hred-other} shows the head reduction of the if statement, the sequence statement, and the fork statement.
 First three rules are standard, while the last one for fork is modified from the one in the original Iris paper, which requires the expression in the forked thread to be well-formed.
 \begin{definition}
-    An expression is well-formed iff. every $\cbreak\!$ and $\ccontinue$ in it is scoped by a $\cloop{e}\!$ and every $\creturn\!$ in it is scoped by a $\ccall\!$.    
+    An expression is well-formed if and only if every $\cbreak\!$ and $\ccontinue$ in it is scoped by a $\cloop{e}\!$ and every $\creturn\!$ in it is scoped by a $\ccall\!$.    
 \end{definition}
 
 % $$
@@ -290,7 +290,7 @@ We mainly demonstrate rules related to the control flow and binding.
     The postconditions for other exit kind is more interesting. Taking $\cbreak\!$ for example, the postcondition says the remaining context $K$ is penetrable by $\cbreak\!$ and the overall break condition $\Phi_B$ holds. \begin{itemize}
         \item If $K$ is penetrable, then the $\cbreak\!$ inside $e$ can also break the control flow in $K$. Thus the break postconditions of $e$ and $K[e]$ should be the same.
         \item If $K$ is impenetrable, then the $\cbreak\!$ inside $e$ is scoped by some $\cloop{e}\!$ in $K$. Therefore, we should forbid the break condition of $e$ to affect the break condition of $K[e]$ (which is determined by statements outside the $\cloop{e}\!$ in $K$) by evaluating $K \in \pure{\cbreak\!}$ and the entire break condition to $\bot$.
-        Consequently, the weakest precondition in the premise is invalidated (because $e$ actually have a break condition).
+        Consequently, the weakest precondition in the premise is invalidated (because $e$ actually has a break condition).
         \item In the second case, to handle the break condition of $e$ properly, we should use \textsc{wp-bind} to bind the context outside the loop and apply \textsc{wp-loop} to the entire loop containing $e$.
     \end{itemize}
 \end{itemize}
@@ -301,10 +301,10 @@ We mainly demonstrate rules related to the control flow and binding.
 
 We also think of the possible typing system of the language consisting of following primary types.
 $$
-A, B \in \textit{Type} ::= \tau \sep \tunit \sep \tint \sep \tbool \sep A \rightarrow B \sep \cdots
+\tau, A, B \in \textit{Type} ::= \tunit \sep \tint \sep \tbool \sep A \rightarrow B \sep \cdots
 $$
-With multiple control flow exits, we should type the result of all possible exits for an expression.
-The $\tau$ represents any type, and if some exit is impossible for an expression (e.g. normal exit for $\cbreak\!$), we should type the result of corresponding exit as $\tau$.
+With multiple evaluation terminals, we should type the result of all possible kinds of terminal for an expression.
+% The $\tau$ represents any type, and if some exit is impossible for an expression (e.g. normal exit for $\cbreak\!$), we should type the result of corresponding exit as $\tau$.
 % It has the following property, and we can always rewrite $\tau$ to any concrete type.
 % $$
 % \forall A \in \textit{Type}. \tau = A
@@ -317,19 +317,23 @@ $$
     \Gamma \vdash e: A_N, A_B, A_C, A_R
 $$
 
-It states that given type assignment $\Gamma$, the type of the normal, break, continue, and return exit results for expression $e$ are respective $A_N$, $A_B$, $A_C$, and $A_R$.
+It states that given type assignment $\Gamma$, if the expression evaluates to a value, a break terminal, a continue terminal, or a return terminal, then types of the value or values carried by terminals are respectively $A_N$, $A_B$, $A_C$, and $A_R$.
+% the type of the normal, break, continue, and return exit results for expression $e$ are respective $A_N$, $A_B$, $A_C$, and $A_R$.
+If the expression evaluation will not reach some terminals, we can type corresponding values arbitrarily using a variable $\tau$.
+For example, $\Gamma \vdash \cbreak 1: \tau, \tint, \tau, \tau$ means that the break type of the expression is $\tint$, while other terminal types are arbitrary and we can set these types manually in favor of our proof.
 
-If the type is $\tau$, then the expression evaluation will not terminate through the corresponding exit and we can type $\tau$ to any type.
-In other words, we have the following rule for any type $A$.
-\begin{mathpar}
-    \inferrule*[left=$\tau$-normal]{
-        \Gamma \vdash e: \tau, A_B, A_C, A_R
-    }{
-        \Gamma \vdash e: A, A_B, A_C, A_R
-    }
-\end{mathpar}
-Similar rules hold for the break type, continue type, and return type.
-In the construction of some typing proof tree, we can either select to convert $\tau$ to some other type to match the premise of other rules, or carry $\tau$ into types in the conclusion.
+
+% If the type is $\tau$, then the expression evaluation will not terminate through the corresponding exit and we can type $\tau$ to any type.
+% In other words, we have the following rule for any type $A$.
+% \begin{mathpar}
+%     \inferrule*[left=$\tau$-normal]{
+%         \Gamma \vdash e: \tau, A_B, A_C, A_R
+%     }{
+%         \Gamma \vdash e: A, A_B, A_C, A_R
+%     }
+% \end{mathpar}
+% Similar rules hold for the break type, continue type, and return type.
+% In the construction of some typing proof tree, we can either select to convert $\tau$ to some other type to match the premise of other rules, or carry $\tau$ into types in the conclusion.
 
 \begin{figure}[h]
     \begin{mathpar}
@@ -393,7 +397,7 @@ In the construction of some typing proof tree, we can either select to convert $
 Figure~\ref{fig:type-rule} shows some typing rules related to control flows and expression application.
 \begin{itemize}
     \item First three rule types three new terminal expressions. Notice that we could have nested break/continue/return structures in $\cbreak\!$ and $\creturn\!$ expressions. The continue type of any expression will always be $\tunit$ in this language, but we still use a variable $A_C$ to represent it in most cases.
-    \item In \textsc{type-loop} rule, The break type of the loop body is converted into normal type of the loop. We require the normal type and continue type of the loop body to be $\tunit$, which is necessary in the Rust language.
+    \item In \textsc{type-loop} rule, The break type of the loop body is converted into the normal type of the loop. We require the normal type and continue type of the loop body to be $\tunit$, which is necessary in the Rust language.
     \item In \textsc{type-call} rule, the normal type and return type of function body should agree. Also, the function body should have $\tau$ as its break type and continue type to guarantee well-formedness.
     \item \textsc{type-seq} and \textsc{type-if} rules are straight forward, where break type, continue type, and return type of expressions should agree respectively.
     \item The \textsc{type-apply} rule, in contrast to \textsc{type-call}, allow the control flow types ($A_C, A_B, A_R$) in the lambda term $e_1$ to be exposed after the application.
