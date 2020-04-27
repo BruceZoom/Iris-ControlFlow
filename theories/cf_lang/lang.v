@@ -149,6 +149,8 @@ Fixpoint to_cf_terminal (v : val) : option val :=
   | _ => None
   end.
 
+(* TODO: definition of well-formedness *)
+
 (** We assume the following encoding of values to 64-bit words: The least 3
 significant bits of every word are a "tag", and we have 61 bits of payload,
 which is enough if all pointers are 8-byte-aligned (common on 64bit
@@ -526,6 +528,84 @@ Fixpoint fill_item (Ki : ectx_item) (e : expr) : expr :=
   | ReturnCtx => Return e
   end.
 
+(* MARK: a more percise version of fill_item, but cannot solve the problem *)
+(* Fixpoint fill_item (Ki : ectx_item) (e : expr) : expr :=
+  match Ki with
+  | AppLCtx v2 =>
+      match to_cf_terminal v2 with
+      | Some v2' => Val v2'
+      | None => App e (of_val v2)
+      end
+  | AppRCtx e1 => App e1 e
+  | UnOpCtx op => UnOp op e
+  | BinOpLCtx op v2 => 
+      match to_cf_terminal v2 with
+      | Some v2' => Val v2'
+      | None => BinOp op e (Val v2)
+      end
+  | BinOpRCtx op e1 => BinOp op e1 e
+  | IfCtx e1 e2 => If e e1 e2
+  | PairLCtx v2 =>
+      match to_cf_terminal v2 with
+      | Some v2' => Val v2'
+      | None => Pair e (Val v2)
+      end
+  | PairRCtx e1 => Pair e1 e
+  | FstCtx => Fst e
+  | SndCtx => Snd e
+  | InjLCtx => InjL e
+  | InjRCtx => InjR e
+  | CaseCtx e1 e2 => Case e e1 e2
+  | AllocNLCtx v2 =>
+      match to_cf_terminal v2 with
+      | Some v2' => Val v2'
+      | None => AllocN e (Val v2)
+      end
+  | AllocNRCtx e1 => AllocN e1 e
+  | LoadCtx => Load e
+  | StoreLCtx v2 =>
+      match to_cf_terminal v2 with
+      | Some v2' => Val v2'
+      | None => Store e (Val v2)
+      end
+  | StoreRCtx e1 => Store e1 e
+  | CmpXchgLCtx v1 v2 =>
+      match to_cf_terminal v1, to_cf_terminal v2 with
+      | Some v1', None => Val v1'
+      | _, Some v2' => Val v2'
+      | _, _ => CmpXchg e (Val v1) (Val v2)
+      end
+  | CmpXchgMCtx e0 v2 =>
+      match to_cf_terminal v2 with
+      | Some v2' => Val v2'
+      | None => CmpXchg e0 e (Val v2)
+      end
+  | CmpXchgRCtx e0 e1 => CmpXchg e0 e1 e
+  | FaaLCtx v2 =>
+      match to_cf_terminal v2 with
+      | Some v2' => Val v2'
+      | None => FAA e (Val v2)
+      end
+  | FaaRCtx e1 => FAA e1 e
+  | ResolveLCtx K v1 v2 =>
+      match to_cf_terminal v1, to_cf_terminal v2 with
+      | Some v1', None => Val v1'
+      | _, Some v2' => Val v2'
+      | _, _ => Resolve (fill_item K e) (Val v1) (Val v2)
+      end
+  | ResolveMCtx ex v2 =>
+      match to_cf_terminal v2 with
+      | Some v2' => Val v2'
+      | None => Resolve ex e (Val v2)
+      end
+  | ResolveRCtx ex e1 => Resolve ex e1 e
+  (* MARK: new rules for new contexts *)
+  | LoopBCtx eb => LoopB eb e
+  | BreakCtx => Break e
+  | CallCtx => Call e
+  | ReturnCtx => Return e
+  end. *)
+
 (** Substitution *)
 Fixpoint subst (x : string) (v : val) (e : expr)  : expr :=
   match e with
@@ -827,7 +907,7 @@ induction Ki; inversion_clear 1; simplify_option_eq; eauto.
 Abort.
 (*
   FIXME: it is OK for context to be unable to evaluate to values, because the control flow can break it to ensure progression
-      (lambda x. Break 1;; x) (Break 2) -[CFCtxS]-> BreakV 2
+      (lambda x. Break 1;; x) (Break 2) -[CFCtxS]-> BreakV 2 (In Rust)
       |
       --[]-> Break 1;; Break 2 --> BreakV 1
 *)
