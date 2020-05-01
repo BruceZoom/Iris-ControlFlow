@@ -842,11 +842,11 @@ Inductive head_step : expr → state → list observation → expr → state →
     head_step (fill_item K e) σ [] (Val v) σ []. *)
   | LoopBS eb σ:
      head_step (LoopB eb (Val $ LitV LitUnit)) σ [] (LoopB eb eb)  σ []
-  | LoopBBreakS eb e σ:
-     head_step (LoopB eb (Break e)) σ [] e σ []
+  | LoopBBreakS eb v σ:
+     head_step (LoopB eb (Val $ BreakV v)) σ [] (Val v) σ []
   | LoopBContinueS eb σ:
-     head_step (LoopB eb Continue) σ [] (Val $ LitV LitUnit) σ []
-  | BreadokS v σ:
+     head_step (LoopB eb Continue) σ [] (LoopB eb eb) σ []
+  | BreakS v σ:
      (* DONE: condition: v is value terminal, so the innermost control flow takes effect *)
      is_value_terminal v ->
      head_step (Break (Val v)) σ [] (Val $ BreakV v) σ []
@@ -898,6 +898,14 @@ Proof. intros [v ?]. induction Ki; simplify_option_eq; eauto. Qed.
 Lemma val_head_stuck e1 σ1 κ e2 σ2 efs : head_step e1 σ1 κ e2 σ2 efs → to_val e1 = None.
 Proof. destruct 1; try naive_solver; try (destruct K; naive_solver). Qed.
 
+(* K[e] -> e'
+e -> e''
+
+K = (lambda x. x) []
+e = y *)
+
+
+(* Head Reduction only reduce the most primitive expression *)
 Lemma head_ctx_step_val Ki e σ1 κ e2 σ2 efs :
   head_step (fill_item Ki e) σ1 κ e2 σ2 efs → is_Some (to_val e).
 Proof. revert κ e2.
