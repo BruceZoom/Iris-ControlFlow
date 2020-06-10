@@ -64,24 +64,27 @@ Inductive expr :=
   | Resolve (e0 : expr) (e1 : expr) (e2 : expr) (* wrapped expr, proph, val *)
   (* MARK: Control Flow: Loop *)
   | LoopB (eb : expr) (e : expr)    (* loop body: original loop body, expression remains in the current iteration *)
-  | Break (e : expr)
-  | Continue
+  | EBreak (e : expr)
+  | EContinue
   (* MARK: Control Flow: Return *)
   | Call (e : expr) (* function invocation: function body *)
-  | Return (e : expr)
+  | EReturn (e : expr)
 with val :=
   | LitV (l : base_lit)
   | RecV (f x : binder) (e : expr)
   | PairV (v1 v2 : val)
   | InjLV (v : val)
-  | InjRV (v : val)
-  (* MARK: Terminals other than "values" *)
-  | BreakV (v : val)
-  | ContinueV
-  | ReturnV (v : val).
+  | InjRV (v : val).
+
+Inductive sval :=
+  | SVal (v : val)
+  | SBreak (v : val)
+  | SContinue
+  | SReturn (v : val).
 
 Bind Scope expr_scope with expr.
 Bind Scope val_scope with val.
+Bind Scope sval_scope with sval.
 
 (** An observation associates a prophecy variable (identifier) to a pair of
 values. The first value is the one that was returned by the (atomic) operation
@@ -90,62 +93,20 @@ wrapped operation is a CmpXchg). The second value is the one that the prophecy
 variable was actually resolved to. *)
 Definition observation : Set := proph_id * (val * val).
 
-Notation of_val := Val (only parsing).
-
-Definition to_val (e : expr) : option val :=
-  match e with
-  | Val v => Some v
-  | _ => None
+Definition of_sval (sv : sval) : expr :=
+  match sv with 
+  | SVal v => Val v
+  | SBreak v => EBreak $ Val v
+  | SContinue => EContinue
+  | SReturn v => EReturn $ Val v
   end.
 
-(* MARK: definition of value terminals *)
-Inductive is_value_terminal : val -> Prop :=
-  | LitVT l : is_value_terminal $ LitV l
-  | RecVT f x e : is_value_terminal $ RecV f x e
-  | PairVT v1 v2 :
-    is_value_terminal v1 ->
-    is_value_terminal v2 ->
-    is_value_terminal $ PairV v1 v2
-  | InjLVT v :
-    is_value_terminal v ->
-    is_value_terminal $ InjLV v
-  | InjRVT v :
-    is_value_terminal v ->
-    is_value_terminal $ InjRV v.
-
-(* MARK: definition of control flow terminals *)
-Inductive is_cf_terminal : val -> Prop :=
-  | BreakVCFT v :
-    is_value_terminal v ->
-    is_cf_terminal $ BreakV v
-  | ContinueVCFT : is_cf_terminal ContinueV
-  | ReturnVCFT v :
-    is_value_terminal v ->
-    is_cf_terminal $ ReturnV v.
-
-(* MARK: convert value to control flow terminals *)
-Fixpoint to_cf_terminal (v : val) : option val :=
-  match v with
-  | PairV v1 v2 =>
-      match (to_cf_terminal v1), (to_cf_terminal v2) with
-      | Some v, _ => Some v
-      | None, Some v => Some v
-      | _, _ => None
-      end
-  (* FIXME: not sure the meaning of InjL/RV *)
-  | InjLV v => to_cf_terminal v
-  | InjRV v => to_cf_terminal v
-  | BreakV v =>
-      match to_cf_terminal v with
-      | Some v' => Some v'
-      | None => Some $ BreakV v
-      end
-  | ContinueV => Some ContinueV
-  | ReturnV v =>
-      match to_cf_terminal v with
-      | Some v' => Some v'
-      | None => Some $ ReturnV v
-      end
+Definition to_sval (e : expr) : option sval :=
+  match e with
+  | Val v => Some $ SVal v
+  | EBreak (Val v) => Some $ SBreak v
+  | EContinue => Some SContinue
+  | EReturn (Val v) => Some $ SReturn v
   | _ => None
   end.
 
@@ -194,7 +155,7 @@ Definition val_is_unboxed (v : val) : Prop :=
 Instance lit_is_unboxed_dec l : Decision (lit_is_unboxed l).
 Proof. destruct l; simpl; exact (decide _). Defined.
 Instance val_is_unboxed_dec v : Decision (val_is_unboxed v).
-Proof. destruct v as [ | | | [] | [] | | | ]; simpl; exact (decide _). Defined.
+Proof. destruct v as [ | | | [] | [] ]; simpl; exact (decide _). Defined.
 
 (** We just compare the word-sized representation of two values, without looking
 into boxed data.  This works out fine if at least one of the to-be-compared
@@ -211,14 +172,22 @@ Record state : Type := {
 }.
 
 (** Equality and other typeclass stuff *)
-Lemma to_of_val v : to_val (of_val v) = Some v.
+Lemma to_of_sval v : to_sval (of_sval v) = Some v.
 Proof. by destruct v. Qed.
 
-Lemma of_to_val e v : to_val e = Some v -> of_val v = e.
-Proof. destruct e=>//=. by intros [= <-]. Qed.
+Lemma of_to_sval e v : to_sval e = Some v -> of_sval v = e.
+Proof.
+  destruct e=>//=;
+  try destruct e=>//=; intros [= <-]; auto.
+Qed.
 
-Instance of_val_inj : Inj (=) (=) of_val.
-Proof. intros ??. congruence. Qed.
+Instance of_sval_inj : Inj (=) (=) of_sval.
+Proof.
+  intros ??.
+  destruct x=>//=;
+  destruct y=>//=;
+  congruence.
+Qed.
 
 Instance base_lit_eq_dec : EqDecision base_lit.
 Proof. solve_decision. Defined.
@@ -265,10 +234,10 @@ Proof.
      (* MARK: new rules for new expressions *)
      | LoopB eb e, LoopB eb' e' =>
         cast_if_and (decide (eb = eb')) (decide (e = e'))
-     | Break e, Break e' => cast_if (decide (e = e'))
-     | Continue, Continue => left _
+     | EBreak e, EBreak e' => cast_if (decide (e = e'))
+     | EContinue, EContinue => left _
      | Call e, Call e' => cast_if (decide (e = e'))
-     | Return e, Return e' => cast_if (decide (e = e'))
+     | EReturn e, EReturn e' => cast_if (decide (e = e'))
      | _, _ => right _
      end
    with gov (v1 v2 : val) {struct v1} : Decision (v1 = v2) :=
@@ -280,15 +249,13 @@ Proof.
         cast_if_and (decide (e1 = e1')) (decide (e2 = e2'))
      | InjLV e, InjLV e' => cast_if (decide (e = e'))
      | InjRV e, InjRV e' => cast_if (decide (e = e'))
-     (* MARK: new rules for new values *)
-     | BreakV v, BreakV v' => cast_if (decide (v = v'))
-     | ContinueV, ContinueV => left _
-     | ReturnV v, ReturnV v' => cast_if (decide (v = v'))
      | _, _ => right _
      end
    for go); try (clear go gov; abstract intuition congruence).
 Defined.
 Instance val_eq_dec : EqDecision val.
+Proof. solve_decision. Defined.
+Instance sval_eq_dec : EqDecision sval.
 Proof. solve_decision. Defined.
 
 Instance base_lit_countable : Countable base_lit.
@@ -354,10 +321,10 @@ Proof.
      | Resolve e0 e1 e2 => GenNode 19 [go e0; go e1; go e2]
      (* MARK: new rules for new expressions *)
      | LoopB eb e => GenNode 20 [go eb; go e]
-     | Break e => GenNode 21 [go e]
-     | Continue => GenNode 22 []
+     | EBreak e => GenNode 21 [go e]
+     | EContinue => GenNode 22 []
      | Call e => GenNode 23 [go e]
-     | Return e => GenNode 24 [go e]
+     | EReturn e => GenNode 24 [go e]
      end
    with gov v :=
      match v with
@@ -367,10 +334,6 @@ Proof.
      | PairV v1 v2 => GenNode 1 [gov v1; gov v2]
      | InjLV v => GenNode 2 [gov v]
      | InjRV v => GenNode 3 [gov v]
-     (* MARK: new rules for new values *)
-     | BreakV v => GenNode 4 [gov v]
-     | ContinueV => GenNode 5 []
-     | ReturnV v => GenNode 6 [gov v]
      end
    for go).
  set (dec :=
@@ -399,10 +362,10 @@ Proof.
      | GenNode 19 [e0; e1; e2] => Resolve (go e0) (go e1) (go e2)
      (* MARK: new rules for new expressions *)
      | GenNode 20 [eb; e] => LoopB (go eb) (go e)
-     | GenNode 21 [e] => Break (go e)
-     | GenNode 22 [] => Continue
+     | GenNode 21 [e] => EBreak (go e)
+     | GenNode 22 [] => EContinue
      | GenNode 23 [e] => Call (go e)
-     | GenNode 24 [e] => Return (go e)
+     | GenNode 24 [e] => EReturn (go e)
      | _ => Val $ LitV LitUnit (* dummy *)
      end
    with gov v :=
@@ -412,10 +375,6 @@ Proof.
      | GenNode 1 [v1; v2] => PairV (gov v1) (gov v2)
      | GenNode 2 [v] => InjLV (gov v)
      | GenNode 3 [v] => InjRV (gov v)
-     (* MARK: new rules for new values *)
-     | GenNode 4 [v] => BreakV (gov v)
-     | GenNode 5 [] => ContinueV
-     | GenNode 6 [v] => ReturnV (gov v)
      | _ => LitV LitUnit (* dummy *)
      end
    for go).
@@ -426,7 +385,11 @@ Proof.
  - destruct v; by f_equal.
 Qed.
 Instance val_countable : Countable val.
-Proof. refine (inj_countable of_val to_val _); auto using to_of_val. Qed.
+Proof.
+  refine (inj_countable (λ v, Val v) (λ e, match e with Val v => Some v | _ => None end) _); auto.
+Qed.
+Instance sval_countable : Countable sval.
+Proof. refine (inj_countable of_sval to_sval _); auto using to_of_sval. Qed.
 
 Instance state_inhabited : Inhabited state :=
   populate {| heap := inhabitant; used_proph_id := inhabitant |}.
