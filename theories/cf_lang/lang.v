@@ -451,6 +451,43 @@ Inductive ectx :=
   | CallCtx (K : ectx)
   | ReturnCtx (K : ectx).
 
+Fixpoint comp_ectx (K1 K2 : ectx) : ectx :=
+  match K1 with
+  | EmptyCtx => K2
+  | AppLCtx K v2 => AppLCtx (comp_ectx K K2) v2
+  | AppRCtx e1 K => AppRCtx e1 (comp_ectx K K2)
+  | UnOpCtx op K => UnOpCtx op (comp_ectx K K2)
+  | BinOpLCtx op K v2 => BinOpLCtx op (comp_ectx K K2) v2
+  | BinOpRCtx op e1 K => BinOpRCtx op e1 (comp_ectx K K2)
+  | IfCtx K e1 e2 => IfCtx (comp_ectx K K2) e1 e2
+  | PairLCtx K v2 => PairLCtx (comp_ectx K K2) v2
+  | PairRCtx e1 K => PairRCtx e1 (comp_ectx K K2)
+  | FstCtx K => FstCtx (comp_ectx K K2)
+  | SndCtx K => SndCtx (comp_ectx K K2)
+  | InjLCtx K => InjLCtx (comp_ectx K K2)
+  | InjRCtx K => InjRCtx (comp_ectx K K2)
+  | CaseCtx K e1 e2 => CaseCtx (comp_ectx K K2) e1 e2
+  | AllocNLCtx K v2 => AllocNLCtx (comp_ectx K K2) v2
+  | AllocNRCtx e1 K => AllocNRCtx e1 (comp_ectx K K2)
+  | LoadCtx K => LoadCtx (comp_ectx K K2)
+  | StoreLCtx K v2 => StoreLCtx (comp_ectx K K2) v2
+  | StoreRCtx e1 K => StoreRCtx e1 (comp_ectx K K2)
+  | CmpXchgLCtx K v1 v2 => CmpXchgLCtx (comp_ectx K K2) v1 v2
+  | CmpXchgMCtx e0 K v2 => CmpXchgMCtx e0 (comp_ectx K K2) v2
+  | CmpXchgRCtx e0 e1 K => CmpXchgRCtx e0 e1 (comp_ectx K K2)
+  | FaaLCtx K v2 => FaaLCtx (comp_ectx K K2) v2
+  | FaaRCtx e1 K => FaaRCtx e1 (comp_ectx K K2)
+  (* TODO: possible problems with the resolve context *)
+  | ResolveLCtx K v1 v2 => ResolveLCtx (comp_ectx K K2) v1 v2
+  | ResolveMCtx e0 K v2 => ResolveMCtx e0 (comp_ectx K K2) v2
+  | ResolveRCtx e0 e1 K => ResolveRCtx e0 e1 (comp_ectx K K2)
+  (* MARK: new contexts *)
+  | LoopBCtx eb K => LoopBCtx eb (comp_ectx K K2)
+  | BreakCtx K => BreakCtx (comp_ectx K K2)
+  | CallCtx K => CallCtx (comp_ectx K K2)
+  | ReturnCtx K => ReturnCtx (comp_ectx K K2)
+  end.
+
 (* MARK: impenetrable contexts *)
 Inductive impenetrable_ectx : expr -> ectx -> Prop :=
   | BreakImpenLoop v eb K:
@@ -462,7 +499,10 @@ Inductive impenetrable_ectx : expr -> ectx -> Prop :=
   | ContinueImpenCall K:
     impenetrable_ectx EContinue (CallCtx K)
   | ReturnImpenCall v K:
-    impenetrable_ectx (EReturn v) (CallCtx K).
+    impenetrable_ectx (EReturn v) (CallCtx K)
+  | CompImpenCtx e K K':
+    impenetrable_ectx e K ->
+    impenetrable_ectx e (comp_ectx K' K).
 
 (** Contextual closure will only reduce [e] in [Resolve e (Val _) (Val _)] if
 the local context of [e] is non-empty. As a consequence, the first argument of
@@ -506,84 +546,6 @@ Fixpoint fill (K : ectx) (e : expr) : expr :=
   | CallCtx K => Call (fill K e)
   | ReturnCtx K => EReturn (fill K e)
   end.
-
-(* MARK: a more percise version of fill_item, but cannot solve the problem *)
-(* Fixpoint fill_item (Ki : ectx_item) (e : expr) : expr :=
-  match Ki with
-  | AppLCtx v2 =>
-      match to_cf_terminal v2 with
-      | Some v2' => Val v2'
-      | None => App e (of_val v2)
-      end
-  | AppRCtx e1 => App e1 e
-  | UnOpCtx op => UnOp op e
-  | BinOpLCtx op v2 => 
-      match to_cf_terminal v2 with
-      | Some v2' => Val v2'
-      | None => BinOp op e (Val v2)
-      end
-  | BinOpRCtx op e1 => BinOp op e1 e
-  | IfCtx e1 e2 => If e e1 e2
-  | PairLCtx v2 =>
-      match to_cf_terminal v2 with
-      | Some v2' => Val v2'
-      | None => Pair e (Val v2)
-      end
-  | PairRCtx e1 => Pair e1 e
-  | FstCtx => Fst e
-  | SndCtx => Snd e
-  | InjLCtx => InjL e
-  | InjRCtx => InjR e
-  | CaseCtx e1 e2 => Case e e1 e2
-  | AllocNLCtx v2 =>
-      match to_cf_terminal v2 with
-      | Some v2' => Val v2'
-      | None => AllocN e (Val v2)
-      end
-  | AllocNRCtx e1 => AllocN e1 e
-  | LoadCtx => Load e
-  | StoreLCtx v2 =>
-      match to_cf_terminal v2 with
-      | Some v2' => Val v2'
-      | None => Store e (Val v2)
-      end
-  | StoreRCtx e1 => Store e1 e
-  | CmpXchgLCtx v1 v2 =>
-      match to_cf_terminal v1, to_cf_terminal v2 with
-      | Some v1', None => Val v1'
-      | _, Some v2' => Val v2'
-      | _, _ => CmpXchg e (Val v1) (Val v2)
-      end
-  | CmpXchgMCtx e0 v2 =>
-      match to_cf_terminal v2 with
-      | Some v2' => Val v2'
-      | None => CmpXchg e0 e (Val v2)
-      end
-  | CmpXchgRCtx e0 e1 => CmpXchg e0 e1 e
-  | FaaLCtx v2 =>
-      match to_cf_terminal v2 with
-      | Some v2' => Val v2'
-      | None => FAA e (Val v2)
-      end
-  | FaaRCtx e1 => FAA e1 e
-  | ResolveLCtx K v1 v2 =>
-      match to_cf_terminal v1, to_cf_terminal v2 with
-      | Some v1', None => Val v1'
-      | _, Some v2' => Val v2'
-      | _, _ => Resolve (fill_item K e) (Val v1) (Val v2)
-      end
-  | ResolveMCtx ex v2 =>
-      match to_cf_terminal v2 with
-      | Some v2' => Val v2'
-      | None => Resolve ex e (Val v2)
-      end
-  | ResolveRCtx ex e1 => Resolve ex e1 e
-  (* MARK: new rules for new contexts *)
-  | LoopBCtx eb => LoopB eb e
-  | BreakCtx => Break e
-  | CallCtx => Call e
-  | ReturnCtx => Return e
-  end. *)
 
 (** Substitution *)
 Fixpoint subst (x : string) (v : val) (e : expr)  : expr :=
@@ -888,10 +850,46 @@ Proof. revert κ e2.
 induction Ki; inversion_clear 1; simplify_option_eq; eauto.
 Abort. *)
 
-Lemma fill_item_no_val_inj Ki1 Ki2 e1 e2 :
+Lemma fill_comp (K1 K2 : ectx) (e : expr) :
+  fill K1 (fill K2 e) = fill (comp_ectx K1 K2) e.
+Proof. induction K1; simpl; try rewrite IHK1; eauto. Qed.
+
+
+Inductive prim_step (e1 : expr) (σ1 : state) (κ : list observation)
+      (e2 : expr) (σ2 : state) (efs : list expr) : Prop :=
+  Ectx_step K e1' e2' :
+    e1 = fill K e1' → e2 = fill K e2' →
+    head_step e1' σ1 κ e2' σ2 efs → prim_step e1 σ1 κ e2 σ2 efs.
+
+Lemma sval_prim_stuck e1 σ1 κ e2 σ2 efs : prim_step e1 σ1 κ e2 σ2 efs → to_sval e1 = None.
+Proof.
+  destruct 1; clear H0.
+  apply sval_head_stuck in H1. subst.
+  revert H1. revert e1'. clear e2'.
+  induction K; intros; subst; eauto.
+  - apply IHK in H1.
+    simpl. destruct (fill K e1'); eauto.
+    inversion H1.
+  - apply IHK in H1.
+    simpl. destruct (fill K e1'); eauto.
+    inversion H1.
+Qed.
+
+(* Not sure required or not *)
+Lemma fill_step e1 σ1 κ e2 σ2 efs K:
+  prim_step e1 σ1 κ e2 σ2 efs →
+  prim_step (fill K e1) σ1 κ (fill K e2) σ2 efs.
+Proof.
+  intros.
+  inversion_clear H; subst.
+  repeat rewrite fill_comp.
+  apply Ectx_step with (comp_ectx K K0) e1' e2'; auto.
+Qed.
+
+(* Lemma fill_item_no_val_inj Ki1 Ki2 e1 e2 :
   to_val e1 = None → to_val e2 = None →
   fill_item Ki1 e1 = fill_item Ki2 e2 → Ki1 = Ki2.
-Proof. revert Ki1. induction Ki2, Ki1; naive_solver eauto with f_equal. Qed.
+Proof. revert Ki1. induction Ki2, Ki1; naive_solver eauto with f_equal. Qed. *)
 
 Lemma alloc_fresh v n σ :
   let l := fresh_locs (dom (gset loc) σ.(heap)) in
@@ -910,22 +908,19 @@ Lemma new_proph_id_fresh σ :
   head_step NewProph σ [] (Val $ LitV $ LitProphecy p) (state_upd_used_proph_id ({[ p ]} ∪.) σ) [].
 Proof. constructor. apply is_fresh. Qed.
 
-Lemma heap_lang_mixin : EctxiLanguageMixin of_val to_val fill_item head_step.
+Lemma cf_lang_mixin : LanguageMixin of_sval to_sval prim_step.
 Proof.
-  split; apply _ || eauto using to_of_val, of_to_val, val_head_stuck,
-    fill_item_val, fill_item_no_val_inj, head_ctx_step_val.
+  split; apply _ || eauto using to_of_sval, of_to_sval, sval_prim_stuck.
 Qed.
-End heap_lang.
+End cf_lang.
 
 (** Language *)
-Canonical Structure heap_ectxi_lang := EctxiLanguage heap_lang.heap_lang_mixin.
-Canonical Structure heap_ectx_lang := EctxLanguageOfEctxi heap_ectxi_lang.
-Canonical Structure heap_lang := LanguageOfEctx heap_ectx_lang.
+Canonical Structure cf_lang := Language cf_lang.cf_lang_mixin.
 
 (* Prefer heap_lang names over ectx_language names. *)
 Export cf_lang.
 
-(** The following lemma is not provable using the axioms of [ectxi_language].
+(* (** The following lemma is not provable using the axioms of [ectxi_language].
 The proof requires a case analysis over context items ([destruct i] on the
 last line), which in all cases yields a non-value. To prove this lemma for
 [ectxi_language] in general, we would require that a term of the form
@@ -971,4 +966,4 @@ Proof.
       end).
     apply (H κs (fill_item K (foldl (flip fill_item) e2' Ks)) σ' efs).
     econstructor 1 with (K := Ks ++ [K]); last done; simpl; by rewrite fill_app.
-Qed.
+Qed. *)
