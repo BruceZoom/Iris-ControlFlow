@@ -93,6 +93,14 @@ wrapped operation is a CmpXchg). The second value is the one that the prophecy
 variable was actually resolved to. *)
 Definition observation : Set := proph_id * (val * val).
 
+Notation of_val := Val (only parsing).
+
+Definition to_val (e : expr) : option val :=
+  match e with
+  | Val v => Some v
+  | _ => None
+  end.
+
 Definition of_sval (sv : sval) : expr :=
   match sv with 
   | SVal v => Val v
@@ -109,6 +117,11 @@ Definition to_sval (e : expr) : option sval :=
   | EReturn (Val v) => Some $ SReturn v
   | _ => None
   end.
+
+Inductive is_cf_terminal : expr -> Prop :=
+  | break_is_cft v: is_cf_terminal $ EBreak v
+  | continue_is_cft: is_cf_terminal EContinue
+  | return_is_cft v: is_cf_terminal $ EReturn v.
 
 (* TODO: definition of well-formedness *)
 
@@ -386,7 +399,7 @@ Proof.
 Qed.
 Instance val_countable : Countable val.
 Proof.
-  refine (inj_countable (λ v, Val v) (λ e, match e with Val v => Some v | _ => None end) _); auto.
+  refine (inj_countable of_val to_val _); auto.
 Qed.
 Instance sval_countable : Countable sval.
 Proof. refine (inj_countable of_sval to_sval _); auto using to_of_sval. Qed.
@@ -403,51 +416,53 @@ Canonical Structure exprO := leibnizO expr.
 
 (* FIXME: where is the context of "hole" *)
 (** Evaluation contexts *)
-Inductive ectx_item :=
-  | AppLCtx (v2 : val)
-  | AppRCtx (e1 : expr)
-  | UnOpCtx (op : un_op)
-  | BinOpLCtx (op : bin_op) (v2 : val)
-  | BinOpRCtx (op : bin_op) (e1 : expr)
-  | IfCtx (e1 e2 : expr)
-  | PairLCtx (v2 : val)
-  | PairRCtx (e1 : expr)
-  | FstCtx
-  | SndCtx
-  | InjLCtx
-  | InjRCtx
-  | CaseCtx (e1 : expr) (e2 : expr)
-  | AllocNLCtx (v2 : val)
-  | AllocNRCtx (e1 : expr)
-  | LoadCtx
-  | StoreLCtx (v2 : val)
-  | StoreRCtx (e1 : expr)
-  | CmpXchgLCtx (v1 : val) (v2 : val)
-  | CmpXchgMCtx (e0 : expr) (v2 : val)
-  | CmpXchgRCtx (e0 : expr) (e1 : expr)
-  | FaaLCtx (v2 : val)
-  | FaaRCtx (e1 : expr)
-  | ResolveLCtx (ctx : ectx_item) (v1 : val) (v2 : val)
-  | ResolveMCtx (e0 : expr) (v2 : val)
-  | ResolveRCtx (e0 : expr) (e1 : expr)
+Inductive ectx :=
+  | EmptyCtx
+  | AppLCtx (K : ectx) (v2 : val)
+  | AppRCtx (e1 : expr) (K : ectx)
+  | UnOpCtx (op : un_op) (K : ectx)
+  | BinOpLCtx (op : bin_op) (K : ectx) (v2 : val)
+  | BinOpRCtx (op : bin_op) (e1 : expr) (K : ectx)
+  | IfCtx (K : ectx) (e1 e2 : expr)
+  | PairLCtx (K : ectx) (v2 : val)
+  | PairRCtx (e1 : expr) (K : ectx)
+  | FstCtx (K : ectx)
+  | SndCtx (K : ectx)
+  | InjLCtx (K : ectx)
+  | InjRCtx (K : ectx)
+  | CaseCtx (K : ectx) (e1 : expr) (e2 : expr)
+  | AllocNLCtx (K : ectx) (v2 : val)
+  | AllocNRCtx (e1 : expr) (K : ectx)
+  | LoadCtx (K : ectx)
+  | StoreLCtx (K : ectx) (v2 : val)
+  | StoreRCtx (e1 : expr) (K : ectx)
+  | CmpXchgLCtx (K : ectx) (v1 : val) (v2 : val)
+  | CmpXchgMCtx (e0 : expr) (K : ectx) (v2 : val)
+  | CmpXchgRCtx (e0 : expr) (e1 : expr) (K : ectx)
+  | FaaLCtx (K : ectx) (v2 : val)
+  | FaaRCtx (e1 : expr) (K : ectx)
+  (* TODO: possible problems with the resolve context *)
+  | ResolveLCtx (K : ectx) (v1 : val) (v2 : val)
+  | ResolveMCtx (e0 : expr) (K : ectx) (v2 : val)
+  | ResolveRCtx (e0 : expr) (e1 : expr) (K : ectx)
   (* MARK: new contexts *)
-  | LoopBCtx (eb : expr)
-  | BreakCtx
-  | CallCtx
-  | ReturnCtx.
+  | LoopBCtx (eb : expr) (K : ectx)
+  | BreakCtx (K : ectx)
+  | CallCtx (K : ectx)
+  | ReturnCtx (K : ectx).
 
 (* MARK: impenetrable contexts *)
-Inductive impenetrable_ectx_item : val -> ectx_item -> Prop :=
-  | BreakImpenLoop v eb :
-    impenetrable_ectx_item (BreakV v) (LoopBCtx eb)
-  | BreakImpenCall v :
-    impenetrable_ectx_item (BreakV v) CallCtx
-  | ContinueImpenLoop eb :
-    impenetrable_ectx_item ContinueV (LoopBCtx eb)
-  | ContinueImpenCall :
-    impenetrable_ectx_item ContinueV CallCtx
-  | ReturnImpenCall v :
-    impenetrable_ectx_item (ReturnV v) CallCtx.
+Inductive impenetrable_ectx : expr -> ectx -> Prop :=
+  | BreakImpenLoop v eb K:
+    impenetrable_ectx (EBreak v) (LoopBCtx eb K)
+  | BreakImpenCall v K:
+    impenetrable_ectx (EBreak v) (CallCtx K)
+  | ContinueImpenLoop eb K:
+    impenetrable_ectx EContinue (LoopBCtx eb K)
+  | ContinueImpenCall K:
+    impenetrable_ectx EContinue (CallCtx K)
+  | ReturnImpenCall v K:
+    impenetrable_ectx (EReturn v) (CallCtx K).
 
 (** Contextual closure will only reduce [e] in [Resolve e (Val _) (Val _)] if
 the local context of [e] is non-empty. As a consequence, the first argument of
@@ -456,39 +471,40 @@ no head steps (i.e., surface reductions) are taken. This means that contextual
 closure will reduce [Resolve (CmpXchg #l #n (#n + #1)) #p #v] into [Resolve
 (CmpXchg #l #n #(n+1)) #p #v], but it cannot context-step any further. *)
 
-Fixpoint fill_item (Ki : ectx_item) (e : expr) : expr :=
-  match Ki with
-  | AppLCtx v2 => App e (of_val v2)
-  | AppRCtx e1 => App e1 e
-  | UnOpCtx op => UnOp op e
-  | BinOpLCtx op v2 => BinOp op e (Val v2)
-  | BinOpRCtx op e1 => BinOp op e1 e
-  | IfCtx e1 e2 => If e e1 e2
-  | PairLCtx v2 => Pair e (Val v2)
-  | PairRCtx e1 => Pair e1 e
-  | FstCtx => Fst e
-  | SndCtx => Snd e
-  | InjLCtx => InjL e
-  | InjRCtx => InjR e
-  | CaseCtx e1 e2 => Case e e1 e2
-  | AllocNLCtx v2 => AllocN e (Val v2)
-  | AllocNRCtx e1 => AllocN e1 e
-  | LoadCtx => Load e
-  | StoreLCtx v2 => Store e (Val v2)
-  | StoreRCtx e1 => Store e1 e
-  | CmpXchgLCtx v1 v2 => CmpXchg e (Val v1) (Val v2)
-  | CmpXchgMCtx e0 v2 => CmpXchg e0 e (Val v2)
-  | CmpXchgRCtx e0 e1 => CmpXchg e0 e1 e
-  | FaaLCtx v2 => FAA e (Val v2)
-  | FaaRCtx e1 => FAA e1 e
-  | ResolveLCtx K v1 v2 => Resolve (fill_item K e) (Val v1) (Val v2)
-  | ResolveMCtx ex v2 => Resolve ex e (Val v2)
-  | ResolveRCtx ex e1 => Resolve ex e1 e
+Fixpoint fill (K : ectx) (e : expr) : expr :=
+  match K with
+  | EmptyCtx => e
+  | AppLCtx K v2 => App (fill K e) (Val v2)
+  | AppRCtx e1 K => App e1 (fill K e)
+  | UnOpCtx op K => UnOp op (fill K e)
+  | BinOpLCtx op K v2 => BinOp op (fill K e) (Val v2)
+  | BinOpRCtx op e1 K => BinOp op e1 (fill K e)
+  | IfCtx K e1 e2 => If (fill K e) e1 e2
+  | PairLCtx K v2 => Pair (fill K e) (Val v2)
+  | PairRCtx e1 K => Pair e1 (fill K e)
+  | FstCtx K => Fst (fill K e)
+  | SndCtx K => Snd (fill K e)
+  | InjLCtx K => InjL (fill K e)
+  | InjRCtx K => InjR (fill K e)
+  | CaseCtx K e1 e2 => Case (fill K e) e1 e2
+  | AllocNLCtx K v2 => AllocN (fill K e) (Val v2)
+  | AllocNRCtx e1 K => AllocN e1 (fill K e)
+  | LoadCtx K => Load (fill K e)
+  | StoreLCtx K v2 => Store (fill K e) (Val v2)
+  | StoreRCtx e1 K => Store e1 (fill K e)
+  | CmpXchgLCtx K v1 v2 => CmpXchg (fill K e) (Val v1) (Val v2)
+  | CmpXchgMCtx e0 K v2 => CmpXchg e0 (fill K e) (Val v2)
+  | CmpXchgRCtx e0 e1 K => CmpXchg e0 e1 (fill K e)
+  | FaaLCtx K v2 => FAA (fill K e) (Val v2)
+  | FaaRCtx e1 K => FAA e1 (fill K e)
+  | ResolveLCtx K v1 v2 => Resolve (fill K e) (Val v1) (Val v2)
+  | ResolveMCtx ex K v2 => Resolve ex (fill K e) (Val v2)
+  | ResolveRCtx ex e1 K => Resolve ex e1 (fill K e)
   (* MARK: new rules for new contexts *)
-  | LoopBCtx eb => LoopB eb e
-  | BreakCtx => Break e
-  | CallCtx => Call e
-  | ReturnCtx => Return e
+  | LoopBCtx eb K => LoopB eb (fill K e)
+  | BreakCtx K => EBreak (fill K e)
+  | CallCtx K => Call (fill K e)
+  | ReturnCtx K => EReturn (fill K e)
   end.
 
 (* MARK: a more percise version of fill_item, but cannot solve the problem *)
@@ -596,10 +612,10 @@ Fixpoint subst (x : string) (v : val) (e : expr)  : expr :=
   | Resolve ex e1 e2 => Resolve (subst x v ex) (subst x v e1) (subst x v e2)
   (* MARK: new rules for new expressions *)
   | LoopB eb e => LoopB (subst x v eb) (subst x v e)  (* TODO: not sure wether to subst eb *)
-  | Break e => Break (subst x v e)
-  | Continue => Continue
+  | EBreak e => EBreak (subst x v e)
+  | EContinue => EContinue
   | Call e => Call (subst x v e)
-  | Return e => Return (subst x v e)
+  | EReturn e => EReturn (subst x v e)
   end.
 
 Definition subst' (mx : binder) (v : val) : expr → expr :=
@@ -734,8 +750,6 @@ Inductive head_step : expr → state → list observation → expr → state →
   | InjRS v σ :
      head_step (InjR $ Val v) σ [] (Val $ InjRV v) σ []
   | BetaS f x e1 v2 e' σ :
-     (* MARK: the value need to be value terminal, otherwise, the application will not happen *)
-     is_value_terminal v2 ->
      e' = subst' x v2 (subst' f (RecV f x e1) e1) →
      head_step (App (Val $ RecV f x e1) (Val v2)) σ [] e' σ []
   | UnOpS op v v' σ :
@@ -767,7 +781,7 @@ Inductive head_step : expr → state → list observation → expr → state →
                []
   | LoadS l v σ :
      σ.(heap) !! l = Some v →
-     head_step (Load (Val $ LitV $ LitLoc l)) σ [] (of_val v) σ []
+     head_step (Load (Val $ LitV $ LitLoc l)) σ [] (Val v) σ []
   | StoreS l v σ :
      is_Some (σ.(heap) !! l) →
      head_step (Store (Val $ LitV $ LitLoc l) (Val v)) σ
@@ -806,82 +820,73 @@ Inductive head_step : expr → state → list observation → expr → state →
   | LoopBS eb σ:
      head_step (LoopB eb (Val $ LitV LitUnit)) σ [] (LoopB eb eb)  σ []
   | LoopBBreakS eb v σ:
-     head_step (LoopB eb (Val $ BreakV v)) σ [] (Val v) σ []
+     head_step (LoopB eb (EBreak $ Val v)) σ [] (Val v) σ []
   | LoopBContinueS eb σ:
-     head_step (LoopB eb Continue) σ [] (LoopB eb eb) σ []
-  | BreakS v σ:
-     (* DONE: condition: v is value terminal, so the innermost control flow takes effect *)
-     is_value_terminal v ->
-     head_step (Break (Val v)) σ [] (Val $ BreakV v) σ []
-  (* | BreakCtxS v K σ:
-    (* TODO: convert composite to basic *)
-     ~impenetrable_ectx_item (BreakV v) K ->
-     head_step (fill_item K (Val $ BreakV v)) σ [] (Val $ BreakV v) σ [] *)
-  | ContinueS σ:
-     head_step Continue σ [] (Val ContinueV) σ []
-  (* | ContinueCtxS K σ:
-    (* TODO: convert composite to basic *)
-     ~impenetrable_ectx_item ContinueV K ->
-     head_step (fill_item K (Val $ ContinueV)) σ [] (Val $ ContinueV) σ [] *)
+     head_step (LoopB eb EContinue) σ [] (LoopB eb eb) σ []
   | CallValueS σ v:
-     (* DONE: condition: v is value terminal, so the innermost control flow takes effect *)
-     is_value_terminal v ->
      head_step (Call (Val v)) σ [] (Val v) σ []
   | CallReturnS v σ:
-     head_step (Call (Val $ ReturnV v)) σ [] (Val v) σ []
-  | ReturnS v σ:
-     (* DONE: condition: v is value terminal, so the innermost control flow takes effect *)
-     is_value_terminal v ->
-     head_step (Return (Val v)) σ [] (Val $ ReturnV v) σ []
-  (* | ReturnCtxS v K σ:
-    (* TODO: convert composite to basic *)
-     ~impenetrable_ectx_item (ReturnV v) K ->
-     head_step (fill_item K (Val $ ReturnV v)) σ [] (Val $ ReturnV v) σ [] *)
-  (* MARK: composite control flow values should be converted to basic control flow terminals
-  FIXME: would cause value head to NOT STUCK, fixed with the update of CFCtxS below
-  *)
-  (* | TerminalS v v' σ:
-     ~is_cf_terminal v ->  (* Prohibit infinite steps *)
-     to_cf_terminal v = Some v' ->
-     head_step (Val $ v) σ [] (Val $ v') σ [] *)
+     head_step (Call (EReturn $ Val v)) σ [] (Val v) σ []
   (* MARK: a more general step relation substitues all control-flow-context-related steps *)
-  | CFCtxS v v' K σ:
-     to_cf_terminal v = Some v' ->
-     ~impenetrable_ectx_item v' K ->
-     head_step (fill_item K $ Val v) σ [] (Val v') σ [].
+  | CFCtxS e K σ:
+     is_cf_terminal e ->
+     ~impenetrable_ectx e K ->
+     ~(K = EmptyCtx) ->
+     head_step (fill K e) σ [] e σ [].
 
 (** Basic properties about the language *)
-Instance fill_item_inj Ki : Inj (=) (=) (fill_item Ki).
-Proof. induction Ki; intros ???; simplify_eq/=; auto with f_equal. Qed.
+Instance fill_inj K : Inj (=) (=) (fill K).
+Proof. induction K; intros ???; simplify_eq/=; auto with f_equal. Qed.
 
-Lemma fill_item_val Ki e :
-  is_Some (to_val (fill_item Ki e)) → is_Some (to_val e).
-Proof. intros [v ?]. induction Ki; simplify_option_eq; eauto. Qed.
+Lemma fill_sval K e :
+  is_Some (to_sval (fill K e)) → is_Some (to_sval e).
+Proof.
+  intros [v ?]. revert H. revert v.
+  induction K; inversion 1.
+  - rewrite H1. eauto.
+  - destruct (fill K e); inversion H1.
+    apply IHK with (SVal v0). eauto.
+  - destruct (fill K e); inversion H1.
+    apply IHK with (SVal v0). eauto.
+Qed.
 
-Lemma val_head_stuck e1 σ1 κ e2 σ2 efs : head_step e1 σ1 κ e2 σ2 efs → to_val e1 = None.
-Proof. destruct 1; try naive_solver; try (destruct K; naive_solver). Qed.
+Lemma fill_not_sval K e:
+  to_sval e = None → to_sval (fill K e) = None.
+Proof.
+  intros.
+  assert (~(is_Some (to_sval e))). {
+    unfold not. rewrite H. apply is_Some_None.
+  }
+  assert (~(is_Some (to_sval (fill K e)))). {
+    unfold not in *. intros. apply fill_sval in H1. auto.
+  }
+  unfold not in H1.
+  destruct (to_sval (fill K e)); auto.
+  exfalso. apply H1. eauto.
+Qed.
 
-(* K[e] -> e'
-e -> e''
-
-K = (lambda x. x) []
-e = y *)
-
+Lemma sval_head_stuck e1 σ1 κ e2 σ2 efs : head_step e1 σ1 κ e2 σ2 efs → to_sval e1 = None.
+Proof.
+  destruct 1; try naive_solver; try (destruct K; naive_solver).
+  destruct K; try congruence; try naive_solver.
+  - simpl; destruct (fill K e) eqn: HK; auto.
+    destruct K; inversion HK.
+    simpl in HK. rewrite HK in H.
+    inversion H.
+  - simpl; destruct (fill K e) eqn: HK; auto.
+    destruct K; inversion HK.
+    simpl in HK. rewrite HK in H.
+    inversion H.
+Qed.
 
 (* Head Reduction only reduce the most primitive expression *)
-Lemma head_ctx_step_val Ki e σ1 κ e2 σ2 efs :
-  head_step (fill_item Ki e) σ1 κ e2 σ2 efs → is_Some (to_val e).
+(* Lemma head_ctx_step_sval K e σ1 κ e2 σ2 efs :
+  head_step (fill K e) σ1 κ e2 σ2 efs → is_Some (to_sval e).
 Proof. revert κ e2.
   induction Ki; inversion 1; subst; eauto.
 
 induction Ki; inversion_clear 1; simplify_option_eq; eauto.
-Abort.
-(*
-  FIXME: it is OK for context to be unable to evaluate to values, because the control flow can break it to ensure progression
-      (lambda x. Break 1;; x) (Break 2) -[CFCtxS]-> BreakV 2 (In Rust)
-      |
-      --[]-> Break 1;; Break 2 --> BreakV 1
-*)
+Abort. *)
 
 Lemma fill_item_no_val_inj Ki1 Ki2 e1 e2 :
   to_val e1 = None → to_val e2 = None →
