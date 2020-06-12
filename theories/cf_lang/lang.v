@@ -417,8 +417,154 @@ Canonical Structure locO := leibnizO loc.
 Canonical Structure valO := leibnizO val.
 Canonical Structure exprO := leibnizO expr.
 
-(* FIXME: where is the context of "hole" *)
-(** Evaluation contexts *)
+
+(* MARK: ctx' is used for isolating an expression from a larger one.
+ DIFFERENT from ectx, an expression can be expressed by multiple ctx'. *)
+Inductive ctx' :=
+  | EmptyCtx'
+  | AppLCtx' (K : ctx') (e2 : expr)
+  | AppRCtx' (e1 : expr) (K : ctx')
+  | UnOpCtx' (op : un_op) (K : ctx')
+  | BinOpLCtx' (op : bin_op) (K : ctx') (e2 : expr)
+  | BinOpRCtx' (op : bin_op) (e1 : expr) (K : ctx')
+  | IfCtx' (K : ctx') (e1 e2 : expr)
+  | PairLCtx' (K : ctx') (e2 : expr)
+  | PairRCtx' (e1 : expr) (K : ctx')
+  | FstCtx' (K : ctx')
+  | SndCtx' (K : ctx')
+  | InjLCtx' (K : ctx')
+  | InjRCtx' (K : ctx')
+  | CaseCtx' (K : ctx') (e1 : expr) (e2 : expr)
+  | AllocNLCtx' (K : ctx') (e2 : expr)
+  | AllocNRCtx' (e1 : expr) (K : ctx')
+  | LoadCtx' (K : ctx')
+  | StoreLCtx' (K : ctx') (e2 : expr)
+  | StoreRCtx' (e1 : expr) (K : ctx')
+  | CmpXchgLCtx' (K : ctx') (e1 : expr) (e2 : expr)
+  | CmpXchgMCtx' (e0 : expr) (K : ctx') (e2 : expr)
+  | CmpXchgRCtx' (e0 : expr) (e1 : expr) (K : ctx')
+  | FaaLCtx' (K : ctx') (e2 : expr)
+  | FaaRCtx' (e1 : expr) (K : ctx')
+  (* TODO: possible problems with the resolve context *)
+  | ResolveLCtx' (K : ctx') (e1 : expr) (e2 : expr)
+  | ResolveMCtx' (e0 : expr) (K : ctx') (e2 : expr)
+  | ResolveRCtx' (e0 : expr) (e1 : expr) (K : ctx')
+  (* MARK: new contexts *)
+  | LoopBCtx' (eb : expr) (K : ctx')
+  | BreakCtx' (K : ctx')
+  | CallCtx' (K : ctx')
+  | ReturnCtx' (K : ctx').
+
+Fixpoint comp_ctx' (K1 K2 : ctx') : ctx' :=
+  match K1 with
+  | EmptyCtx' => K2
+  | AppLCtx' K e2 => AppLCtx' (comp_ctx' K K2) e2
+  | AppRCtx' e1 K => AppRCtx' e1 (comp_ctx' K K2)
+  | UnOpCtx' op K => UnOpCtx' op (comp_ctx' K K2)
+  | BinOpLCtx' op K e2 => BinOpLCtx' op (comp_ctx' K K2) e2
+  | BinOpRCtx' op e1 K => BinOpRCtx' op e1 (comp_ctx' K K2)
+  | IfCtx' K e1 e2 => IfCtx' (comp_ctx' K K2) e1 e2
+  | PairLCtx' K e2 => PairLCtx' (comp_ctx' K K2) e2
+  | PairRCtx' e1 K => PairRCtx' e1 (comp_ctx' K K2)
+  | FstCtx' K => FstCtx' (comp_ctx' K K2)
+  | SndCtx' K => SndCtx' (comp_ctx' K K2)
+  | InjLCtx' K => InjLCtx' (comp_ctx' K K2)
+  | InjRCtx' K => InjRCtx' (comp_ctx' K K2)
+  | CaseCtx' K e1 e2 => CaseCtx' (comp_ctx' K K2) e1 e2
+  | AllocNLCtx' K e2 => AllocNLCtx' (comp_ctx' K K2) e2
+  | AllocNRCtx' e1 K => AllocNRCtx' e1 (comp_ctx' K K2)
+  | LoadCtx' K => LoadCtx' (comp_ctx' K K2)
+  | StoreLCtx' K e2 => StoreLCtx' (comp_ctx' K K2) e2
+  | StoreRCtx' e1 K => StoreRCtx' e1 (comp_ctx' K K2)
+  | CmpXchgLCtx' K e1 e2 => CmpXchgLCtx' (comp_ctx' K K2) e1 e2
+  | CmpXchgMCtx' e0 K e2 => CmpXchgMCtx' e0 (comp_ctx' K K2) e2
+  | CmpXchgRCtx' e0 e1 K => CmpXchgRCtx' e0 e1 (comp_ctx' K K2)
+  | FaaLCtx' K e2 => FaaLCtx' (comp_ctx' K K2) e2
+  | FaaRCtx' e1 K => FaaRCtx' e1 (comp_ctx' K K2)
+  (* TODO: possible problems with the resolve context *)
+  | ResolveLCtx' K e1 e2 => ResolveLCtx' (comp_ctx' K K2) e1 e2
+  | ResolveMCtx' e0 K e2 => ResolveMCtx' e0 (comp_ctx' K K2) e2
+  | ResolveRCtx' e0 e1 K => ResolveRCtx' e0 e1 (comp_ctx' K K2)
+  (* MARK: new contexts *)
+  | LoopBCtx' eb K => LoopBCtx' eb (comp_ctx' K K2)
+  | BreakCtx' K => BreakCtx' (comp_ctx' K K2)
+  | CallCtx' K => CallCtx' (comp_ctx' K K2)
+  | ReturnCtx' K => ReturnCtx' (comp_ctx' K K2)
+  end.
+
+(* MARK: impenetrable contexts *)
+Inductive impenetrable_ctx' : expr -> ctx' -> Prop :=
+  | BreakImpenLoop' e eb K:
+    impenetrable_ctx' (EBreak e) (LoopBCtx' eb K)
+  | BreakImpenCall' e K:
+    impenetrable_ctx' (EBreak e) (CallCtx' K)
+  | ContinueImpenLoop' eb K:
+    impenetrable_ctx' EContinue (LoopBCtx' eb K)
+  | ContinueImpenCall' K:
+    impenetrable_ctx' EContinue (CallCtx' K)
+  | ReturnImpenCall' e K:
+    impenetrable_ctx' (EReturn e) (CallCtx' K)
+  | CompImpenCtx' e K K':
+    impenetrable_ctx' e K ->
+    impenetrable_ctx' e (comp_ctx' K' K).
+
+(* MARK: scope contexts *)
+Inductive scope_ctx' : expr -> ctx' -> Prop :=
+  | LoopScopeBreak' e eb K:
+    ~ impenetrable_ctx' (EBreak e) K ->
+    scope_ctx' (EBreak e) (LoopBCtx' eb K)
+  | LoopScopeContinue' eb K:
+    ~ impenetrable_ctx' EContinue K ->
+    scope_ctx' EContinue (LoopBCtx' eb K)
+  | CallScopeReturn' e K:
+    ~ impenetrable_ctx' (EReturn e) K ->
+    scope_ctx' (EReturn e) (CallCtx' K)
+  | CompScopeCtx' e K K':
+    scope_ctx' e K ->
+    scope_ctx' e (comp_ctx' K' K).
+
+Fixpoint fill' (K : ctx') (e : expr) : expr :=
+  match K with
+  | EmptyCtx' => e
+  | AppLCtx' K e2 => App (fill' K e) e2
+  | AppRCtx' e1 K => App e1 (fill' K e)
+  | UnOpCtx' op K => UnOp op (fill' K e)
+  | BinOpLCtx' op K e2 => BinOp op (fill' K e) e2
+  | BinOpRCtx' op e1 K => BinOp op e1 (fill' K e)
+  | IfCtx' K e1 e2 => If (fill' K e) e1 e2
+  | PairLCtx' K e2 => Pair (fill' K e) e2
+  | PairRCtx' e1 K => Pair e1 (fill' K e)
+  | FstCtx' K => Fst (fill' K e)
+  | SndCtx' K => Snd (fill' K e)
+  | InjLCtx' K => InjL (fill' K e)
+  | InjRCtx' K => InjR (fill' K e)
+  | CaseCtx' K e1 e2 => Case (fill' K e) e1 e2
+  | AllocNLCtx' K e2 => AllocN (fill' K e) e2
+  | AllocNRCtx' e1 K => AllocN e1 (fill' K e)
+  | LoadCtx' K => Load (fill' K e)
+  | StoreLCtx' K e2 => Store (fill' K e) e2
+  | StoreRCtx' e1 K => Store e1 (fill' K e)
+  | CmpXchgLCtx' K e1 e2 => CmpXchg (fill' K e) e1 e2
+  | CmpXchgMCtx' e0 K e2 => CmpXchg e0 (fill' K e) e2
+  | CmpXchgRCtx' e0 e1 K => CmpXchg e0 e1 (fill' K e)
+  | FaaLCtx' K e2 => FAA (fill' K e) e2
+  | FaaRCtx' e1 K => FAA e1 (fill' K e)
+  | ResolveLCtx' K e1 e2 => Resolve (fill' K e) e1 e2
+  | ResolveMCtx' ex K e2 => Resolve ex (fill' K e) e2
+  | ResolveRCtx' ex e1 K => Resolve ex e1 (fill' K e)
+  (* MARK: new rules for new contexts *)
+  | LoopBCtx' eb K => LoopB eb (fill' K e)
+  | BreakCtx' K => EBreak (fill' K e)
+  | CallCtx' K => Call (fill' K e)
+  | ReturnCtx' K => EReturn (fill' K e)
+  end.
+
+(* MARK: definition of well-formedness *)
+Definition wellformed (e : expr) : Prop :=
+  forall e' K, is_cf_expr e' -> e = fill' K e' -> scope_ctx' e K.
+
+
+(** MARK: Regular Evaluation contexts *)
 Inductive ectx :=
   | EmptyCtx
   | AppLCtx (K : ectx) (v2 : val)
@@ -507,21 +653,6 @@ Inductive impenetrable_ectx : expr -> ectx -> Prop :=
     impenetrable_ectx e K ->
     impenetrable_ectx e (comp_ectx K' K).
 
-(* MARK: scope contexts *)
-Inductive scope_ectx : expr -> ectx -> Prop :=
-  | LoopScopeBreak e eb K:
-    ~ impenetrable_ectx (EBreak e) K ->
-    scope_ectx (EBreak e) (LoopBCtx eb K)
-  | LoopScopeContinue eb K:
-    ~ impenetrable_ectx EContinue K ->
-    scope_ectx EContinue (LoopBCtx eb K)
-  | CallScopeReturn e K:
-    ~ impenetrable_ectx (EReturn e) K ->
-    scope_ectx (EReturn e) (CallCtx K)
-  | CompScopeCtx e K K':
-    scope_ectx e K ->
-    scope_ectx e (comp_ectx K' K).
-
 (** Contextual closure will only reduce [e] in [Resolve e (Val _) (Val _)] if
 the local context of [e] is non-empty. As a consequence, the first argument of
 [Resolve] is not completely evaluated (down to a value) by contextual closure:
@@ -564,10 +695,6 @@ Fixpoint fill (K : ectx) (e : expr) : expr :=
   | CallCtx K => Call (fill K e)
   | ReturnCtx K => EReturn (fill K e)
   end.
-
-(* MARK: definition of well-formedness *)
-Definition wellformed (e : expr) : Prop :=
-  forall e' K, is_cf_expr e' -> e = fill K e' -> scope_ectx e K.
 
 (** Substitution *)
 Fixpoint subst (x : string) (v : val) (e : expr)  : expr :=
