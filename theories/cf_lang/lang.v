@@ -118,12 +118,15 @@ Definition to_sval (e : expr) : option sval :=
   | _ => None
   end.
 
-Inductive is_cf_terminal : expr -> Prop :=
-  | break_is_cft v: is_cf_terminal $ EBreak v
-  | continue_is_cft: is_cf_terminal EContinue
-  | return_is_cft v: is_cf_terminal $ EReturn v.
+Inductive is_cf_expr : expr -> Prop :=
+| break_is_cfe e: is_cf_expr $ EBreak e
+| continue_is_cfe: is_cf_expr EContinue
+| return_is_cfe e: is_cf_expr $ EReturn e.
 
-(* TODO: definition of well-formedness *)
+Inductive is_cf_terminal : expr -> Prop :=
+  | break_is_cft v: is_cf_terminal $ EBreak (Val v)
+  | continue_is_cft: is_cf_terminal EContinue
+  | return_is_cft v: is_cf_terminal $ EReturn (Val v).
 
 (** We assume the following encoding of values to 64-bit words: The least 3
 significant bits of every word are a "tag", and we have 61 bits of payload,
@@ -490,19 +493,34 @@ Fixpoint comp_ectx (K1 K2 : ectx) : ectx :=
 
 (* MARK: impenetrable contexts *)
 Inductive impenetrable_ectx : expr -> ectx -> Prop :=
-  | BreakImpenLoop v eb K:
-    impenetrable_ectx (EBreak v) (LoopBCtx eb K)
-  | BreakImpenCall v K:
-    impenetrable_ectx (EBreak v) (CallCtx K)
+  | BreakImpenLoop e eb K:
+    impenetrable_ectx (EBreak e) (LoopBCtx eb K)
+  | BreakImpenCall e K:
+    impenetrable_ectx (EBreak e) (CallCtx K)
   | ContinueImpenLoop eb K:
     impenetrable_ectx EContinue (LoopBCtx eb K)
   | ContinueImpenCall K:
     impenetrable_ectx EContinue (CallCtx K)
-  | ReturnImpenCall v K:
-    impenetrable_ectx (EReturn v) (CallCtx K)
+  | ReturnImpenCall e K:
+    impenetrable_ectx (EReturn e) (CallCtx K)
   | CompImpenCtx e K K':
     impenetrable_ectx e K ->
     impenetrable_ectx e (comp_ectx K' K).
+
+(* MARK: scope contexts *)
+Inductive scope_ectx : expr -> ectx -> Prop :=
+  | LoopScopeBreak e eb K:
+    ~ impenetrable_ectx (EBreak e) K ->
+    scope_ectx (EBreak e) (LoopBCtx eb K)
+  | LoopScopeContinue eb K:
+    ~ impenetrable_ectx EContinue K ->
+    scope_ectx EContinue (LoopBCtx eb K)
+  | CallScopeReturn e K:
+    ~ impenetrable_ectx (EReturn e) K ->
+    scope_ectx (EReturn e) (CallCtx K)
+  | CompScopeCtx e K K':
+    scope_ectx e K ->
+    scope_ectx e (comp_ectx K' K).
 
 (** Contextual closure will only reduce [e] in [Resolve e (Val _) (Val _)] if
 the local context of [e] is non-empty. As a consequence, the first argument of
@@ -546,6 +564,10 @@ Fixpoint fill (K : ectx) (e : expr) : expr :=
   | CallCtx K => Call (fill K e)
   | ReturnCtx K => EReturn (fill K e)
   end.
+
+(* MARK: definition of well-formedness *)
+Definition wellformed (e : expr) : Prop :=
+  forall e' K, is_cf_expr e' -> e = fill K e' -> scope_ectx e K.
 
 (** Substitution *)
 Fixpoint subst (x : string) (v : val) (e : expr)  : expr :=
@@ -733,6 +755,7 @@ Inductive head_step : expr → state → list observation → expr → state →
   | CaseRS v e1 e2 σ :
      head_step (Case (Val $ InjRV v) e1 e2) σ [] (App e2 (Val v)) σ []
   | ForkS e σ:
+     wellformed e ->  (* MARK: The forked program must be wellformed *)
      head_step (Fork e) σ [] (Val $ LitV LitUnit) σ [e]
   | AllocNS n v σ l :
      0 < n →
@@ -776,9 +799,6 @@ Inductive head_step : expr → state → list observation → expr → state →
      head_step (Resolve e (Val $ LitV $ LitProphecy p) (Val w)) σ
                (κs ++ [(p, (v, w))]) (Val v) σ' ts
   (* MARK: new head reductions for new expressions *)
-  (* test:
-  | ReturnS K e v σ:
-    head_step (fill_item K e) σ [] (Val v) σ []. *)
   | LoopBS eb σ:
      head_step (LoopB eb (Val $ LitV LitUnit)) σ [] (LoopB eb eb)  σ []
   | LoopBBreakS eb v σ:
@@ -791,9 +811,9 @@ Inductive head_step : expr → state → list observation → expr → state →
      head_step (Call (EReturn $ Val v)) σ [] (Val v) σ []
   (* MARK: a more general step relation substitues all control-flow-context-related steps *)
   | CFCtxS e K σ:
-     is_cf_terminal e ->
-     ~impenetrable_ectx e K ->
-     ~(K = EmptyCtx) ->
+     is_cf_terminal e ->  (* already require parameters of control flow evaluate to values *)
+     ~ K = EmptyCtx ->
+     ~ impenetrable_ectx e K ->
      head_step (fill K e) σ [] e σ [].
 
 (** Basic properties about the language *)
