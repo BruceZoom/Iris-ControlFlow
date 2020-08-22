@@ -926,8 +926,9 @@ Inductive head_step : expr → state → list observation → expr → state →
      head_step (Resolve e (Val $ LitV $ LitProphecy p) (Val w)) σ
                (κs ++ [(p, (v, w))]) (Val v) σ' ts
   (* MARK: new head reductions for new expressions *)
-  | LoopBS eb σ:
-     head_step (LoopB eb (Val $ LitV LitUnit)) σ [] (LoopB eb eb)  σ []
+  | LoopBS eb σ v:
+    head_step (LoopB eb (Val v)) σ [] (LoopB eb eb) σ []   
+    (* head_step (LoopB eb (Val $ LitV LitUnit)) σ [] (LoopB eb eb)  σ [] *)
   | LoopBBreakS eb v σ:
      head_step (LoopB eb (EBreak $ Val v)) σ [] (Val v) σ []
   | LoopBContinueS eb σ:
