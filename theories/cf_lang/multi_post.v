@@ -3,7 +3,7 @@ From iris.proofmode Require Import coq_tactics reduction.
 From iris.proofmode Require Import tactics.
 From iris.algebra Require Import auth gmap.
 From iris.base_logic Require Export gen_heap.
-From iris.base_logic.lib Require Export proph_map invariants.
+From iris.base_logic.lib Require Export proph_map invariants wsat.
 From iris.program_logic Require Import atomic.
 From iris.program_logic Require Export weakestpre total_weakestpre.
 From iris.program_logic Require Import ectx_lifting total_ectx_lifting.
@@ -86,64 +86,66 @@ Lemma tac_wp_loop e I φb φr:
   {{ I }} (loop e) {{ φb }} {{ bot }} {{ bot }} {{ φr }}.
 Proof.
   iIntros "#Hbdy !# H".
+  iLöb as "IH".
   destruct e.
   - rewrite wp_unfold /wp_pre; simpl.
-    rewrite wp_unfold /wp_pre; simpl.
-    iIntros (σ1 κ κs _) "[Hs Hproph]".
-    (* iMod (inv_alloc ⊤ _ _ with "Hi") as "Hinv". *)
+    rewrite wp_unfold. rewrite <- wp_unfold at 1.
+    rewrite /wp_pre; simpl.
+    iIntros (σ1 κ κs _) "Hs".
     iApply fupd_frame_l.
     iSplit.
     + iPureIntro. unfold reducible. simpl.
       exists nil, (LoopB v v), σ1, nil.
       apply (Ectx_step _ _ _ _ _ _ EmptyCtx (LoopB v v) (LoopB v v)); auto.
       apply LoopBS.
-    + iAssert emp%I as "Htmp"; auto.
-      iMod (inv_alloc ⊤ _ _ with "Htmp") as "Hinv"; iClear "Htmp".
-
-      iInv "Hinv" as "H1" "Hclose".
-
-      eassert (⊤ = ↑⊤). { auto. }
-      epose proof (difference_diag_L (↑⊤)).
-      rewrite <- H in H0 at 1.
-      (* FIXME: stuck here *)
-      rewrite <- H0.
-      unfold fupd.
-      rewrite H0.
-
-      Search (_ ∖ ↑_).
-      SearchAbout UpClose.
-      replace ∅ with (⊤ ∖ ↑⊤).
+    + 
+      (* unfold fupd at 2. *)
+      unfold bi_fupd_fupd. simpl.
+      unfold uPred_fupd.
+      rewrite seal_eq.
+      unfold uPred_fupd_def.
+      iIntros "[Hw Htop]".
+      
+      iApply except_0_bupd.
       iModIntro.
+      
+      iApply bupd_frame_l.
+      iFrame "Hw".
+      iApply bupd_frame_r.
+      iPoseProof ownE_empty as "Hown_phi".
+      iFrame "Hown_phi".
 
-      rewrite difference_diag_L.
-      epose proof (non_empty_difference (↑⊤) ⊤).
-      eassert (↑⊤ ⊂ ⊤); 
-      Locate union_difference_L.
-      Search (_ ∖ _).
-      simpl.
-      replace (⊤ ∖ ↑⊤) with ⊤.
-      iModIntro. 
+      iIntros (? ? ? Hstep) "[Hw Hphi]".
+      repeat iModIntro.
+      iFrame "Hw". iFrame "Hphi".
+      
+      iIntros "!# [Hw _]".
+
+      repeat iModIntro.
+      iFrame "Hw". iFrame "Htop".
+
+      assert (a = (LoopB (Val v) (Val v)) /\ σ1 = a0 /\ κ = [] /\ a1 = []).
+      {
+        inversion Hstep.
+        destruct K; inversion H; subst.
+        - simpl in *; subst.
+          inversion H1; subst; auto.
+          destruct K; inversion H; subst; try congruence.
+          destruct K; inversion H7; simpl in *; subst.
+          inversion H0.
+        - destruct K; inversion H4; simpl in *; subst.
+          inversion H1; subst.
+          destruct K; inversion H2; simpl in *; subst.
+          auto.
+      }
+      destruct H as [? [? [? ?]]]; subst.
+
+      iFrame "Hs".
+
+      iSplitL; auto.
+      iApply "IH".
+      auto.
+Admitted.
     
-    iIntros (e2 σ2 efs).
-
-    unfold fupd. unfold bi_fupd_fupd.
-    simpl.
-    unfold uPred_fupd.
-    Search fupd.
-    unfold bi_fupd_fupd.
-
-    simpl. unfold uPred_fupd.
-
-    iModIntro.
-    
-    iFrame "H1 H2".
-    destruct s.
-    2:{ } 
-    + unfold reducible. 
-  iApply wp_bind.
-    
-  iPoseProof "Hinv I" as "H1".
-  
-
 
 End multi_post.
