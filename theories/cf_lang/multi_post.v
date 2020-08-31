@@ -81,70 +81,304 @@ Proof.
 Qed.
 
 (* MARK: loop *)
+(* Lemma wp_loop_aux e0 e I φb φr:
+  {{ I }} e0 {{ λ v, I }} {{ φb }} {{ λ v, I }} {{ φr }} -∗
+  WP e {{ λ v, I }} {{ φb }} {{ λ v, I }} {{ φr }} -∗
+  WP LoopB e0 e {{φb}}{{bot}}{{bot}}{{φr}}.
+Proof.
+  iIntros "#Hbdy H".
+  destruct (to_sval e) eqn:eq.
+  {
+    admit.
+  }
+  {
+    (* iPoseProof ("Hbdy" with "H") as "H1". *)
+    (* iClear "Hbdy". *)
+    iRevert (e eq) "H".
+    iLöb as "IH".
+    iIntros (e eq) "H".
+
+    repeat rewrite wp_unfold.
+    rewrite <- wp_unfold at 1.
+    rewrite /wp_pre; simpl.
+    rewrite eq.
+
+    iIntros (σ1 κ κs ?) "Hs".
+    iSpecialize ("H" $! σ1 κ κs a with "Hs").
+
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+    iIntros "Hw".
+    iSpecialize ("H" with "Hw").
+
+    repeat iMod "H".
+    repeat iModIntro.
+
+    iDestruct "H" as "[Hw [Hphi [% H]]]".
+    iFrame "Hw". iFrame "Hphi".
+
+    destruct H as [κ' [e' [σ' [efs Hred]]]].
+
+    iSplitR; [iPureIntro | ].
+    {
+      exists κ', (LoopB e0 e'), σ', efs.
+      inversion Hred; subst.
+      apply Ectx_step with (LoopBCtx e0 (comp_ectx K EmptyCtx)) e1' e2'; simpl;
+      [rewrite <- fill_comp | rewrite <- fill_comp |]; auto.
+    }
+
+    iIntros (e2 σ2 efes0 Hstep) "Hw".
+
+    assert (κ' = κ /\ e2 = LoopB e0 e' /\ σ2 = σ' /\ efes0 = efs) as [? [? [? ?]]].
+    {
+      admit.
+    }
+    subst.
+
+    iSpecialize ("H" $! e' σ' efs Hred with "Hw").
+
+    repeat iMod "H".
+    repeat iModIntro.
+    iDestruct "H" as "[Hw [Hphi H]]".
+    iFrame "Hw". iFrame "Hphi".
+    iNext.
+
+    iIntros "Hw".
+    iSpecialize ("H" with "Hw").
+
+    repeat iMod "H".
+    repeat iModIntro.
+    iDestruct "H" as "[Hw [Hphi H]]".
+    iFrame "Hw". iFrame "Hphi".
+
+    iDestruct "H" as "[Hs [Hwp Hefs]]".
+    iFrame "Hs". iSplitR "Hefs"; auto.
+
+
+
+    iApply "IH"; auto.
+  } *)
+
 Lemma tac_wp_loop e I φb φr:
   {{ I }} e {{ λ v, I }} {{ φb }} {{ λ v, I }} {{ φr }} ⊢
   {{ I }} (loop e) {{ φb }} {{ bot }} {{ bot }} {{ φr }}.
 Proof.
   iIntros "#Hbdy !# H".
-  iLöb as "IH".
-  destruct e.
-  - rewrite wp_unfold /wp_pre; simpl.
-    rewrite wp_unfold. rewrite <- wp_unfold at 1.
+  iLöb as "IH0".
+  destruct (to_sval e) eqn:eq.
+  {
+    iLöb as "IH".
+    destruct s;
+    apply of_to_sval in eq; simpl in eq; subst.
+    
+    - rewrite wp_unfold /wp_pre; simpl.
+      rewrite wp_unfold. rewrite <- wp_unfold at 1.
+      rewrite /wp_pre; simpl.
+      iIntros (σ1 κ κs _) "Hs".
+      iApply fupd_frame_l.
+      iSplit.
+      + iPureIntro. unfold reducible. simpl.
+        exists nil, (LoopB v v), σ1, nil.
+        apply (Ectx_step _ _ _ _ _ _ EmptyCtx (LoopB v v) (LoopB v v)); auto.
+        apply LoopBS.
+      + 
+        (* unfold fupd at 2. *)
+        unfold bi_fupd_fupd. simpl.
+        unfold uPred_fupd.
+        rewrite seal_eq.
+        unfold uPred_fupd_def.
+        iIntros "[Hw Htop]".
+        
+        iApply except_0_bupd.
+        iModIntro.
+        
+        iApply bupd_frame_l.
+        iFrame "Hw".
+        iApply bupd_frame_r.
+        iPoseProof ownE_empty as "Hown_phi".
+        iFrame "Hown_phi".
+
+        iIntros (? ? ? Hstep) "[Hw Hphi]".
+        repeat iModIntro.
+        iFrame "Hw". iFrame "Hphi".
+        
+        iIntros "!# [Hw _]".
+
+        repeat iModIntro.
+        iFrame "Hw". iFrame "Htop".
+
+        assert (a = (LoopB (Val v) (Val v)) /\ σ1 = a0 /\ κ = [] /\ a1 = []).
+        {
+          inversion Hstep.
+          destruct K; inversion H; subst.
+          - simpl in *; subst.
+            inversion H1; subst; auto.
+            destruct K; inversion H; subst; try congruence.
+            destruct K; inversion H7; simpl in *; subst.
+            inversion H0.
+          - destruct K; inversion H4; simpl in *; subst.
+            inversion H1; subst.
+            destruct K; inversion H2; simpl in *; subst.
+            auto.
+        }
+        destruct H as [? [? [? ?]]]; subst.
+
+        iFrame "Hs".
+
+        iSplitL; auto.
+        iApply "IH".
+        auto.
+    - admit.
+    - admit.
+    - admit.
+  }
+  {
+    (* Main proof for the preservation case *)
+    iPoseProof ("Hbdy" with "H") as "H1".  
+    remember e as e0.
+    rewrite -> Heqe0 in *.
+    rewrite <- Heqe0 at 2.
+    rewrite <- Heqe0 at 2.
+    rewrite <- Heqe0 at 3.
+    
+    clear Heqe0.
+    iClear "Hbdy".
+    
+    iRevert (e eq) "H1".
+    iLöb as "IH".
+    iIntros (e eq) "H1".
+
+    repeat rewrite wp_unfold.
+    rewrite <- wp_unfold at 1.
     rewrite /wp_pre; simpl.
-    iIntros (σ1 κ κs _) "Hs".
-    iApply fupd_frame_l.
-    iSplit.
-    + iPureIntro. unfold reducible. simpl.
-      exists nil, (LoopB v v), σ1, nil.
-      apply (Ectx_step _ _ _ _ _ _ EmptyCtx (LoopB v v) (LoopB v v)); auto.
-      apply LoopBS.
-    + 
-      (* unfold fupd at 2. *)
-      unfold bi_fupd_fupd. simpl.
-      unfold uPred_fupd.
-      rewrite seal_eq.
-      unfold uPred_fupd_def.
-      iIntros "[Hw Htop]".
-      
-      iApply except_0_bupd.
-      iModIntro.
-      
-      iApply bupd_frame_l.
-      iFrame "Hw".
-      iApply bupd_frame_r.
-      iPoseProof ownE_empty as "Hown_phi".
-      iFrame "Hown_phi".
+    rewrite eq.
 
-      iIntros (? ? ? Hstep) "[Hw Hphi]".
-      repeat iModIntro.
-      iFrame "Hw". iFrame "Hphi".
-      
-      iIntros "!# [Hw _]".
+    iIntros (σ1 κ κs ?) "Hs".
+    iSpecialize ("H1" $! σ1 κ κs a with "Hs").
 
-      repeat iModIntro.
-      iFrame "Hw". iFrame "Htop".
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+    iIntros "Hw".
+    iSpecialize ("H1" with "Hw").
 
-      assert (a = (LoopB (Val v) (Val v)) /\ σ1 = a0 /\ κ = [] /\ a1 = []).
-      {
-        inversion Hstep.
-        destruct K; inversion H; subst.
-        - simpl in *; subst.
-          inversion H1; subst; auto.
-          destruct K; inversion H; subst; try congruence.
-          destruct K; inversion H7; simpl in *; subst.
-          inversion H0.
-        - destruct K; inversion H4; simpl in *; subst.
-          inversion H1; subst.
-          destruct K; inversion H2; simpl in *; subst.
-          auto.
-      }
-      destruct H as [? [? [? ?]]]; subst.
+    repeat iMod "H1".
+    repeat iModIntro.
 
-      iFrame "Hs".
+    iDestruct "H1" as "[Hw [Hphi [% H1]]]".
+    iFrame "Hw". iFrame "Hphi".
 
-      iSplitL; auto.
-      iApply "IH".
-      auto.
+    destruct H as [κ' [e' [σ' [efs Hred]]]].
+
+    iSplitR; [iPureIntro | ].
+    {
+      exists κ', (LoopB e0 e'), σ', efs.
+      inversion Hred; subst.
+      apply Ectx_step with (LoopBCtx e0 (comp_ectx K EmptyCtx)) e1' e2'; simpl;
+      [rewrite <- fill_comp | rewrite <- fill_comp |]; auto.
+    }
+
+    iIntros (e2 σ2 efes0 Hstep) "Hw".
+
+    assert (κ' = κ /\ e2 = LoopB e0 e' /\ σ2 = σ' /\ efes0 = efs) as [? [? [? ?]]].
+    {
+      admit.
+    }
+    subst.
+
+    iSpecialize ("H1" $! e' σ' efs Hred with "Hw").
+
+    repeat iMod "H1".
+    repeat iModIntro.
+    iDestruct "H1" as "[Hw [Hphi H1]]".
+    iFrame "Hw". iFrame "Hphi".
+    iNext.
+
+    iIntros "Hw".
+    iSpecialize ("H1" with "Hw").
+
+    repeat iMod "H1".
+    repeat iModIntro.
+    iDestruct "H1" as "[Hw [Hphi H1]]".
+    iFrame "Hw". iFrame "Hphi".
+
+    iDestruct "H1" as "[Hs [Hwp Hefs]]".
+    iFrame "Hs". iSplitR "Hefs"; auto.
+
+    destruct (to_sval e') eqn:eq'; [| iApply "IH"; auto].
+
+    (* Cases when body reduces to terminals *)
+    iClear "IH".
+    destruct s; apply of_to_sval in eq'; simpl in eq'; subst.
+    - repeat rewrite wp_unfold.
+      rewrite <- wp_unfold at 1.
+      rewrite /wp_pre; simpl.
+      iIntros (σ0 κ0 κs0 _) "Hs".
+      iApply fupd_frame_l.
+      iSplit.
+      + iPureIntro. unfold reducible. simpl.
+        exists nil, (LoopB e0 e0), σ0, nil.
+        apply (Ectx_step _ _ _ _ _ _ EmptyCtx (LoopB e0 v) (LoopB e0 e0)); auto.
+        apply LoopBS.
+      + 
+        (* unfold fupd at 2. *)
+        unfold bi_fupd_fupd. simpl.
+        unfold uPred_fupd.
+        rewrite seal_eq.
+        unfold uPred_fupd_def.
+        iIntros "Hw".
+
+        iSpecialize ("Hwp" with "Hw").
+        repeat iMod "Hwp".
+        iDestruct "Hwp" as "[Hw [Htop H]]".
+        
+        iApply except_0_bupd.
+        iModIntro.
+        
+        iApply bupd_frame_l.
+        iFrame "Hw".
+        iApply bupd_frame_r.
+        iPoseProof ownE_empty as "Hown_phi".
+        iFrame "Hown_phi".
+
+        iIntros (? ? ? Hstep') "[Hw Hphi]".
+        repeat iModIntro.
+        iFrame "Hw". iFrame "Hphi".
+        
+        iIntros "!# [Hw _]".
+
+        repeat iModIntro.
+        iFrame "Hw". iFrame "Htop".
+
+        assert (a0 = (LoopB e0 e0) /\ a1 = σ0 /\ κ0 = [] /\ a2 = []) as [? [? [? ?]]].
+        {
+          inversion Hstep'.
+          destruct K; inversion H; subst.
+          - simpl in *; subst.
+            inversion H1; subst; auto.
+            destruct K; inversion H; subst; try congruence.
+            destruct K; inversion H7; simpl in *; subst.
+            inversion H0.
+          - destruct K; inversion H4; simpl in *; subst.
+            inversion H1; subst.
+            destruct K; inversion H2; simpl in *; subst.
+            auto.
+        }
+        subst.
+
+        iFrame "Hs".
+
+        iSplitL; auto.
+        iApply "IH0"; auto.
+      - admit.
+      - admit.
+      - admit.
+  }
 Admitted.
     
 
