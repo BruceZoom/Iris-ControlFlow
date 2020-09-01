@@ -139,8 +139,7 @@ Proof.
           inversion H0.
         - destruct K; inversion H4; simpl in *; subst.
           inversion H1; subst.
-          destruct K; inversion H2; simpl in *; subst.
-          auto.
+          destruct K; inversion H2; simpl in *; subst; congruence.
       }
       subst.
       iFrame "Hs".
@@ -277,11 +276,12 @@ Proof.
       exists nil, (EReturn v), σ0, nil.
       apply (Ectx_step _ _ _ _ _ _ EmptyCtx (LoopB e0 (EReturn v)) (EReturn v)); auto.
       apply (CFCtxS (EReturn v) (LoopBCtx e0 EmptyCtx)); [apply return_is_cft | auto |].
-      admit.
-      (* unfold not. intros.
+      unfold not. intros.
       inversion H; subst.
-      destruct K'.
-      destruct K; destruct K'; simpl in *; inversion H0; subst. *)
+      destruct K'; simpl in *; inversion H0; subst; try congruence.
+      destruct K; destruct K'; simpl in *; inversion H5; subst.
+      inversion H3; subst.
+      destruct K; destruct K'; simpl in *; inversion H2; subst; congruence.
     + unfold bi_fupd_fupd. simpl.
       unfold uPred_fupd.
       rewrite seal_eq.
@@ -334,7 +334,7 @@ Proof.
       iClear "#".
       rewrite wp_unfold /wp_pre; simpl.
       auto.
-Admitted.
+Qed.
 
 Lemma tac_wp_loop e I φb φr:
   {{ I }} e {{ λ v, I }} {{ φb }} {{ λ v, I }} {{ φr }} ⊢
@@ -395,14 +395,15 @@ Proof.
       [rewrite <- fill_comp | rewrite <- fill_comp |]; auto.
     }
 
-    iIntros (e2 σ2 efes0 Hstep) "Hw".
+    iIntros (e2 σ2 efs0 Hstep) "Hw".
 
     (* TODO: Need for congruence lemma *)
-    assert (κ' = κ /\ e2 = LoopB e0 e' /\ σ2 = σ' /\ efes0 = efs) as [? [? [? ?]]].
+    assert (κ' = κ /\ e2 = LoopB e0 e' /\ σ2 = σ' /\ efs0 = efs) as [? [? [? ?]]].
     {
-      inversion Hred; subst.
-      inversion Hstep.
-      admit.
+      apply (fill_step _ _ _ _ _ _ (LoopBCtx e0 EmptyCtx)) in Hred.
+      simpl in Hred.
+      pose proof prim_step_congruence _ _ _ _ _ _ _ _ _ _ Hred Hstep.
+      naive_solver.
     }
     subst.
 
@@ -429,7 +430,7 @@ Proof.
 
     iApply wp_loop_sval; [apply eq' | auto | auto].
   }
-Admitted.
+Qed.
 
 
 Lemma wp_bind_sval s e K φn φb φc φr:
@@ -567,11 +568,12 @@ Proof.
     destruct H as [κ' [e' [σ' [efs' H]]]].
 
     (* TODO: congruence lemma *)
-    assert (e2 = fill K e' /\ κ' = κ /\ σ' = σ2 /\ efs' = efs) as [? [? [? ?]]].
-    { admit. } subst.
+    pose proof prim_step_congruence _ _ _ _ _ _ _ _ _ _ Hstep
+                                    (fill_step _ _ _ _ _ _ K H) as [? [? [? ?]]].
+    subst.
 
     iCombine ("Hw Hphi'") as "Hw".
-    iSpecialize ("H" $! e' σ2 efs H with "Hw").
+    iSpecialize ("H" $! e' σ' efs' H with "Hw").
 
     repeat iMod "H".
     iDestruct "H" as "[Hw [Hphi' H]]".

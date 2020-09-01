@@ -650,6 +650,7 @@ Inductive impenetrable_ectx : expr -> ectx -> Prop :=
   | ReturnImpenCall e K:
     impenetrable_ectx (EReturn e) (CallCtx K)
   | CompImpenCtx e K K':
+    ~ K' = EmptyCtx ->
     impenetrable_ectx e K ->
     impenetrable_ectx e (comp_ectx K' K).
 
@@ -1067,6 +1068,20 @@ Canonical Structure cf_lang := Language cf_lang.cf_lang_mixin.
 
 (* Prefer heap_lang names over ectx_language names. *)
 Export cf_lang.
+
+Lemma head_step_congruence e e1 e2 σ σ1 σ2 κ1 κ2 efs1 efs2:
+  head_step e σ κ1 e1 σ1 efs1 ->
+  head_step e σ κ2 e2 σ2 efs2 ->
+  κ1 = κ2 /\ e1 = e2 /\ σ1 = σ2 /\ efs1 = efs2.
+Proof.
+Admitted.
+
+Lemma prim_step_congruence e e1 e2 σ σ1 σ2 κ1 κ2 efs1 efs2:
+  prim_step e σ κ1 e1 σ1 efs1 ->
+  prim_step e σ κ2 e2 σ2 efs2 ->
+  κ1 = κ2 /\ e1 = e2 /\ σ1 = σ2 /\ efs1 = efs2.
+Proof.
+Admitted.
 
 Lemma break_penetrable_preservation v K σ1 κ e2 σ2 efs:
   ¬ impenetrable_ectx (EBreak $ Val v) K ->
