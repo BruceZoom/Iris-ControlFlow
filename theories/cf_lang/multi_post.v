@@ -400,6 +400,8 @@ Proof.
     (* TODO: Need for congruence lemma *)
     assert (κ' = κ /\ e2 = LoopB e0 e' /\ σ2 = σ' /\ efes0 = efs) as [? [? [? ?]]].
     {
+      inversion Hred; subst.
+      inversion Hstep.
       admit.
     }
     subst.
@@ -429,5 +431,171 @@ Proof.
   }
 Admitted.
 
+
+Lemma wp_bind_sval s e K φn φb φc φr:
+  to_sval e = Some s ->
+  WP e {{ λ v, (WP (fill K (Val v)) {{ φn }} {{ φb }} {{ φc }} {{ φr }}) }}
+       {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx (EBreak v) K)) (φb v) }}
+       {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx EContinue K)) (φc v) }}
+       {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx (EReturn v) K)) (φr v) }}
+  ⊢ WP (fill K e) {{ φn }} {{ φb }} {{ φc }} {{ φr }}.
+Proof.
+  iIntros (eq) "H".
+  destruct s; apply of_to_sval in eq; simpl in eq; subst.
+  {
+    rewrite wp_unfold /wp_pre; simpl.
+    iMod "H". auto.
+  }
+  {
+    rewrite wp_unfold /wp_pre; simpl.
+    iMod "H".
+    iDestruct "H" as "[% H]".
+
+    iRevert (K H).
+    iLöb as "IH".
+    iIntros (K H).
+    
+    rewrite wp_unfold /wp_pre; simpl.
+    destruct (to_sval (fill K (break v))) eqn:eq;
+    [destruct K; inversion eq; try congruence; try (destruct K; inversion eq); auto |].
+    
+    iIntros (σ1 κ κs _) "Hs".
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+    iIntros "[Hw Htop]".
+
+    iApply except_0_bupd.
+    iModIntro.
+    
+    iApply bupd_frame_l.
+    iFrame "Hw".
+    iApply bupd_frame_r.
+    iPoseProof ownE_empty as "Hown_phi".
+    iFrame "Hown_phi".
+
+    iSplitR.
+    {
+      iPureIntro.
+      unfold reducible.
+      exists nil, (EBreak $ Val v), σ1, nil.
+      apply (Ectx_step _ _ _ _ _ _ EmptyCtx (fill K (break v)) (break v)); auto.
+      apply CFCtxS; auto.
+      - apply break_is_cft.
+      - unfold not. intros; subst.
+        inversion eq.
+    }
+
+    iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Hphi".
+    iIntros "!# [Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Htop".
+
+    pose proof break_penetrable_preservation _ _ _ _ _ _ _ H Hstep as [? [? [? [K' [? ?]]]]].
+    subst.
+    iFrame "Hs".
+    iSplitL; auto.
+    iApply ("IH" with "[H] []"); auto.
+  }
+  {
+    admit.
+  }
+  {
+    admit.
+  }
+Admitted. 
+
+Lemma tac_wp_bind e K φn φb φc φr:
+  WP e {{ λ v, (WP (fill K (Val v)) {{ φn }} {{ φb }} {{ φc }} {{ φr }}) }}
+       {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx (EBreak v) K)) (φb v) }}
+       {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx EContinue K)) (φc v) }}
+       {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx (EReturn v) K)) (φr v) }}
+  ⊢ WP (fill K e) {{ φn }} {{ φb }} {{ φc }} {{ φr }}.
+Proof.
+  iIntros "H".
+
+  destruct (to_sval e) eqn:eq.
+  {
+    iApply (wp_bind_sval s); auto.
+  }
+  {
+    iRevert (e eq) "H".
+    iLöb as "IH".
+    iIntros (e eq) "H".
+
+    repeat rewrite wp_unfold.
+    rewrite /wp_pre; simpl.
+    rewrite eq.
+    pose proof fill_not_sval K _ eq as eq'.
+    rewrite eq'.
+
+    iIntros (σ1 κ κs ?) "Hs".
+    iSpecialize ("H" $! σ1 κ κs a with "Hs").
+
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+    iIntros "[Hw Htop]".
+
+    iApply except_0_bupd.
+    iModIntro.
+    
+    iApply bupd_frame_l.
+    iFrame "Hw".
+    iApply bupd_frame_r.
+    iPoseProof ownE_empty as "Hown_phi".
+    iFrame "Hown_phi".
+
+    iSplitR;
+    [iPureIntro;(* FIXME: apply (reducible_fill _ _ eq H) should work *) admit |].
+
+    iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
+    iCombine ("Hw Htop") as "Hw".
+    iSpecialize ("H" with "Hw").
+
+    repeat iMod "H".
+    
+
+    iDestruct "H" as "[Hw [Hphi' [% H]]]".
+
+    destruct H as [κ' [e' [σ' [efs' H]]]].
+
+    (* TODO: congruence lemma *)
+    assert (e2 = fill K e' /\ κ' = κ /\ σ' = σ2 /\ efs' = efs) as [? [? [? ?]]].
+    { admit. } subst.
+
+    iCombine ("Hw Hphi'") as "Hw".
+    iSpecialize ("H" $! e' σ2 efs H with "Hw").
+
+    repeat iMod "H".
+    iDestruct "H" as "[Hw [Hphi' H]]".
+
+
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Hphi".
+
+    iNext.
+
+    iIntros "Hw".
+    iSpecialize ("H" with "Hw").
+
+    repeat iMod "H".
+    repeat iModIntro.
+
+    iDestruct "H" as "[Hw [Htop [Hs [Hwp Hefs]]]]".
+    iFrame "Hw". iFrame "Htop". iFrame "Hs".
+    iSplitR "Hefs"; auto.
+
+    destruct (to_sval e') eqn:eq'';
+    [iApply (wp_bind_sval s); auto |].
+    iApply "IH"; auto.
+  }
+Admitted.
 
 End multi_post.

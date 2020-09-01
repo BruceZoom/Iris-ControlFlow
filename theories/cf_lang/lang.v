@@ -1068,6 +1068,15 @@ Canonical Structure cf_lang := Language cf_lang.cf_lang_mixin.
 (* Prefer heap_lang names over ectx_language names. *)
 Export cf_lang.
 
+Lemma break_penetrable_preservation v K σ1 κ e2 σ2 efs:
+  ¬ impenetrable_ectx (EBreak $ Val v) K ->
+  prim_step (fill K (EBreak $ Val v)) σ1 κ e2 σ2 efs ->
+  σ1 = σ2 /\ κ = [] /\ efs = [] /\
+  exists K', e2 = fill K' (EBreak $ Val v) /\ ¬ impenetrable_ectx (EBreak $ Val v) K'.
+Proof.
+Admitted.
+
+
 (* (** The following lemma is not provable using the axioms of [ectxi_language].
 The proof requires a case analysis over context items ([destruct i] on the
 last line), which in all cases yields a non-value. To prove this lemma for
