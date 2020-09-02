@@ -385,10 +385,9 @@ Proof.
     iDestruct "H1" as "[Hw [Hphi [% H1]]]".
     iFrame "Hw". iFrame "Hphi".
 
-    destruct H as [κ' [e' [σ' [efs Hred]]]].
-
-    iSplitR; [iPureIntro | ].
+    iSplitR; [iPureIntro | clear H].
     {
+      destruct H as [κ' [e' [σ' [efs Hred]]]].
       exists κ', (LoopB e0 e'), σ', efs.
       inversion Hred; subst.
       apply Ectx_step with (LoopBCtx e0 (comp_ectx K EmptyCtx)) e1' e2'; simpl;
@@ -397,7 +396,40 @@ Proof.
 
     iIntros (e2 σ2 efs0 Hstep) "Hw".
 
-    (* TODO: Need for congruence lemma *)
+    (* DONE: may be used instead of congruence lemma *)
+    assert (exists e1, prim_step e σ1 κ e1 σ2 efs0 /\
+          (e2 = LoopB e0 e1 \/ exists v, e1 = e2 /\ e1 = EReturn $ Val v)) as [e1 [Hred ?]].
+    {
+      inversion Hstep.
+      destruct K; inversion H; simpl in *; subst.
+      - inversion H1; subst; inversion eq.
+        destruct K; inversion H; subst; try congruence.
+        clear H H3 H6.
+        destruct e2'; inversion H0; subst.
+        + exfalso. apply H4. apply BreakImpenLoop.
+        + exfalso. apply H4. apply ContinueImpenLoop.
+        + assert (¬ impenetrable_ectx (return v) K).
+          {
+            intros H. apply H4.
+            replace (LoopBCtx e0 K) with (comp_ectx (LoopBCtx e0 EmptyCtx) K); auto.
+            eapply CompImpenCtx; auto.
+          }
+          exists (EReturn v).
+          split.
+          * apply Ectx_step with EmptyCtx (fill K (EReturn v)) (EReturn v); auto.
+            apply CFCtxS; auto.
+            intros ?; subst.
+            inversion eq.
+          * right. eauto.
+      - exists (fill K e2').
+        split.
+        + apply Ectx_step with K e1' e2'; auto.
+        + auto.
+    }
+
+    iSpecialize ("H1" $! e1 σ2 efs0 Hred with "Hw").
+
+    (* DONE: the congruence lemma is no longer needed
     assert (κ' = κ /\ e2 = LoopB e0 e' /\ σ2 = σ' /\ efs0 = efs) as [? [? [? ?]]].
     {
       apply (fill_step _ _ _ _ _ _ (LoopBCtx e0 EmptyCtx)) in Hred.
@@ -407,7 +439,7 @@ Proof.
     }
     subst.
 
-    iSpecialize ("H1" $! e' σ' efs Hred with "Hw").
+    iSpecialize ("H1" $! e' σ' efs Hred with "Hw"). *)
 
     repeat iMod "H1".
     repeat iModIntro.
@@ -426,9 +458,15 @@ Proof.
     iDestruct "H1" as "[Hs [Hwp Hefs]]".
     iFrame "Hs". iSplitR "Hefs"; auto.
 
-    destruct (to_sval e') eqn:eq'; [| iApply "IH"; auto].
-
-    iApply wp_loop_sval; [apply eq' | auto | auto].
+    destruct H.
+    - subst. 
+      destruct (to_sval e1) eqn:eq'; [| iApply "IH"; auto].
+      iApply wp_loop_sval; [apply eq' | auto | auto].
+    - destruct H as [v [? ?]]; subst.
+      repeat rewrite wp_unfold.
+      rewrite <- wp_unfold at 1.
+      rewrite /wp_pre; simpl.
+      auto.
   }
 Qed.
 
@@ -563,17 +601,20 @@ Proof.
     repeat iMod "H".
     
 
-    iDestruct "H" as "[Hw [Hphi' [% H]]]".
+    iDestruct "H" as "[Hw [Hphi' [_ H]]]".
 
-    destruct H as [κ' [e' [σ' [efs' H]]]].
+    assert (exists e1, e2 = fill K e1 /\ prim_step e σ1 κ e1 σ2 efs) as [e1 [? Hred]].
+    { eapply fill_step_inv; auto. } subst.
 
-    (* TODO: congruence lemma *)
+    (* destruct H as [κ' [e' [σ' [efs' H]]]].
+
+    (* DONE: congruence lemma is no longer needed *)
     pose proof prim_step_congruence _ _ _ _ _ _ _ _ _ _ Hstep
                                     (fill_step _ _ _ _ _ _ K H) as [? [? [? ?]]].
-    subst.
+    subst. *)
 
     iCombine ("Hw Hphi'") as "Hw".
-    iSpecialize ("H" $! e' σ' efs' H with "Hw").
+    iSpecialize ("H" $! e1 σ2 efs Hred with "Hw").
 
     repeat iMod "H".
     iDestruct "H" as "[Hw [Hphi' H]]".
@@ -594,7 +635,7 @@ Proof.
     iFrame "Hw". iFrame "Htop". iFrame "Hs".
     iSplitR "Hefs"; auto.
 
-    destruct (to_sval e') eqn:eq'';
+    destruct (to_sval e1) eqn:eq'';
     [iApply (wp_bind_sval s); auto |].
     iApply "IH"; auto.
   }
