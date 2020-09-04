@@ -1,3 +1,5 @@
 -R theories iris_cf
 
 theories/cf_lang/lang.v
+theories/cf_lang/notation.v
+theories/cf_lang/multi_post.v
