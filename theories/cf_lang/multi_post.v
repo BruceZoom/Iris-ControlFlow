@@ -541,12 +541,116 @@ Proof.
     iApply ("IH" with "[H] []"); auto.
   }
   {
-    admit.
+    rewrite wp_unfold /wp_pre; simpl.
+    iMod "H".
+    iDestruct "H" as "[% H]".
+
+    iRevert (K H).
+    iLöb as "IH".
+    iIntros (K H).
+    
+    rewrite wp_unfold /wp_pre; simpl.
+    destruct (to_sval (fill K EContinue)) eqn:eq;
+    [destruct K; inversion eq; try congruence; try (destruct K; inversion eq); auto |].
+    
+    iIntros (σ1 κ κs _) "Hs".
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+    iIntros "[Hw Htop]".
+
+    iApply except_0_bupd.
+    iModIntro.
+    
+    iApply bupd_frame_l.
+    iFrame "Hw".
+    iApply bupd_frame_r.
+    iPoseProof ownE_empty as "Hown_phi".
+    iFrame "Hown_phi".
+
+    iSplitR.
+    {
+      iPureIntro.
+      unfold reducible.
+      exists nil, (EContinue), σ1, nil.
+      apply (Ectx_step _ _ _ _ _ _ EmptyCtx (fill K EContinue) EContinue); auto.
+      apply CFCtxS; auto.
+      - apply continue_is_cft.
+      - unfold not. intros; subst.
+        inversion eq.
+    }
+
+    iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Hphi".
+    iIntros "!# [Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Htop".
+
+    pose proof continue_penetrable_preservation _ _ _ _ _ _ H Hstep as [? [? [? [K' [? ?]]]]].
+    subst.
+    iFrame "Hs".
+    iSplitL; auto.
+    iApply ("IH" with "[H] []"); auto.
   }
   {
-    admit.
+    rewrite wp_unfold /wp_pre; simpl.
+    iMod "H".
+    iDestruct "H" as "[% H]".
+
+    iRevert (K H).
+    iLöb as "IH".
+    iIntros (K H).
+    
+    rewrite wp_unfold /wp_pre; simpl.
+    destruct (to_sval (fill K (EReturn v))) eqn:eq;
+    [destruct K; inversion eq; try congruence; try (destruct K; inversion eq); auto |].
+    
+    iIntros (σ1 κ κs _) "Hs".
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+    iIntros "[Hw Htop]".
+
+    iApply except_0_bupd.
+    iModIntro.
+    
+    iApply bupd_frame_l.
+    iFrame "Hw".
+    iApply bupd_frame_r.
+    iPoseProof ownE_empty as "Hown_phi".
+    iFrame "Hown_phi".
+
+    iSplitR.
+    {
+      iPureIntro.
+      unfold reducible.
+      exists nil, (EReturn v), σ1, nil.
+      apply (Ectx_step _ _ _ _ _ _ EmptyCtx (fill K (EReturn v)) (EReturn v)); auto.
+      apply CFCtxS; auto.
+      - apply return_is_cft.
+      - unfold not. intros; subst.
+        inversion eq.
+    }
+
+    iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Hphi".
+    iIntros "!# [Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Htop".
+
+    pose proof return_penetrable_preservation _ _ _ _ _ _ _ H Hstep as [? [? [? [K' [? ?]]]]].
+    subst.
+    iFrame "Hs".
+    iSplitL; auto.
+    iApply ("IH" with "[H] []"); auto.
   }
-Admitted. 
+Qed.
 
 Lemma tac_wp_bind e K φn φb φc φr:
   WP e {{ λ v, (WP (fill K (Val v)) {{ φn }} {{ φb }} {{ φc }} {{ φr }}) }}

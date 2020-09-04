@@ -1090,6 +1090,49 @@ Lemma break_penetrable_preservation v K σ1 κ e2 σ2 efs:
   σ1 = σ2 /\ κ = [] /\ efs = [] /\
   exists K', e2 = fill K' (EBreak $ Val v) /\ ¬ impenetrable_ectx (EBreak $ Val v) K'.
 Proof.
+  intros.
+  inversion H0; subst.
+
+  (* inversion H3; subst.
+  {
+    destruct K, K0; simpl in *;
+    inversion H1.
+    destruct K0; simpl in *; inversion H4.
+    try (destruct K0; simpl in *; inversion H4).
+    
+  }
+
+  assert (exists K1, e1' = fill K1 (EBreak (Val v))).
+  {
+    
+  }
+
+
+  destruct K.
+  - simpl in *. apply val_stuck in H0.
+    inversion H0.
+  - inversion H0; subst.
+    destruct K0; inversion H1; simpl in *; subst.
+    + inversion H3; subst; [destruct K; inversion H1 |].
+      repeat split; auto. *)
+
+Admitted.
+
+
+Lemma continue_penetrable_preservation K σ1 κ e2 σ2 efs:
+  ¬ impenetrable_ectx EContinue K ->
+  prim_step (fill K EContinue) σ1 κ e2 σ2 efs ->
+  σ1 = σ2 /\ κ = [] /\ efs = [] /\
+  exists K', e2 = fill K' EContinue /\ ¬ impenetrable_ectx EContinue K'.
+Proof.
+Admitted.
+
+Lemma return_penetrable_preservation v K σ1 κ e2 σ2 efs:
+  ¬ impenetrable_ectx (EReturn $ Val v) K ->
+  prim_step (fill K (EReturn $ Val v)) σ1 κ e2 σ2 efs ->
+  σ1 = σ2 /\ κ = [] /\ efs = [] /\
+  exists K', e2 = fill K' (EReturn $ Val v) /\ ¬ impenetrable_ectx (EReturn $ Val v) K'.
+Proof.
 Admitted.
 
 
