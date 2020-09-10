@@ -1251,101 +1251,35 @@ Proof.
   }
 Qed.
 
-Lemma break_penetrable_preservation v K σ1 κ e2 σ2 efs:
-  ¬ impenetrable_ectx (EBreak $ Val v) K ->
-  prim_step (fill K (EBreak $ Val v)) σ1 κ e2 σ2 efs ->
-  σ1 = σ2 /\ κ = [] /\ efs = [] /\
-  exists K', e2 = fill K' (EBreak $ Val v) /\ ¬ impenetrable_ectx (EBreak $ Val v) K'.
+Lemma cf_step_congruence e1 K1 σ1 κ e2 σ2 efs:
+  is_cf_terminal e1 ->
+  ¬ impenetrable_ectx e1 K1 ->
+  head_step (fill K1 e1) σ1 κ e2 σ2 efs ->
+  e1 = e2 ∧ σ1 = σ2 ∧ κ = [] ∧ efs = [].
 Proof.
   intros.
-  inversion H0; subst.
-
-  assert ((exists v1, e1' = Val v1) \/ exists K1, e1' = fill K1 (EBreak (Val v))).
-  {
-    clear H0 H3 H.
-    revert K0 H1.
-    induction K; intros; simpl in *;
-    destruct K0; simpl in H1; inversion H1; subst;
-    try apply IHK in H0;
-    try apply IHK in H1;
-    try apply IHK in H2;
-    try apply IHK in H3;
-    auto;
-    try 
-    match goal with
-    | HK: Val ?v = fill ?K ?e |- ?P => left; destruct_inversion K HK; eauto
-    | HK: fill ?K ?e = Val ?v |- ?P => left; destruct_inversion K HK; eauto
-    end.
-    - right; exists EmptyCtx; eauto.
-    - right; exists (AppLCtx K v2); eauto.
-    - right; exists (AppRCtx e1 K); eauto.
-    - right; exists (UnOpCtx op K); eauto.
-    - right; exists (BinOpLCtx op K v2); eauto.
-    - right; exists (BinOpRCtx op e1 K); eauto.
-    - right; exists (IfCtx K e1 e2); eauto.
-    - right; exists (PairLCtx K v2); eauto.
-    - right; exists (PairRCtx e1 K); eauto.
-    - right; exists (FstCtx K); eauto.
-    - right; exists (SndCtx K); eauto.
-    - right; exists (InjLCtx K); eauto.
-    - right; exists (InjRCtx K); eauto.
-    - right; exists (CaseCtx K e1 e2); eauto.
-    - right; exists (AllocNLCtx K v2); eauto.
-    - right; exists (AllocNRCtx e1 K); eauto.
-    - right; exists (LoadCtx K); eauto.
-    - right; exists (StoreLCtx K v2); eauto.
-    - right; exists (StoreRCtx e1 K); eauto.
-    - right; exists (CmpXchgLCtx K v1 v2); eauto.
-    - right; exists (CmpXchgMCtx e0 K v2); eauto.
-    - right; exists (CmpXchgRCtx e0 e1 K); eauto.
-    - right; exists (FaaLCtx K v2); eauto.
-    - right; exists (FaaRCtx e1 K); eauto.
-    - right; exists (ResolveLCtx K v1 v2); eauto.
-    - right; exists (ResolveMCtx e0 K v2); eauto.
-    - right; exists (ResolveRCtx e0 e1 K); eauto.
-    - right; exists (LoopBCtx  eb K); eauto.
-    - right; exists (BreakCtx K); eauto.
-    - right; exists (CallCtx K); eauto.
-    - right; exists (ReturnCtx K); eauto.
-  }
-
-  destruct H2.
-  {
-    destruct H2; subst.
-    inversion H3; subst.
-    destruct K1; simpl in H2; inversion H2; congruence.
-  }
-
-  destruct H2 as [K1 ?]; subst.
-  rewrite fill_comp in H1.
-
-  apply fill_no_val_inj in H1; auto; subst.
-  
-  apply comp_penetrable in H as [? ?].
-
-  assert (e2' = EBreak (Val v) /\ σ1 = σ2 /\ κ = [] /\ efs = []) as [? [? [? ?]]]. {
-  clear H0 H.
-  remember (fill K1 (EBreak (Val v))) as e1'.
-  revert K1 Heqe1' H1.
-  induction H3; intros; subst;
+  remember (fill K1 e1) as e1'.
+  revert K1 Heqe1' H0.
+  destruct H;
+  induction H1; intros; subst;
   match goal with
-  | H: is_cf_terminal ?e |- ?P => idtac
+  | _: is_cf_terminal ?e1 |- ?P => idtac
   | |- ?P =>
-  (destruct_inversion K1 Heqe1';
-  try
-  match goal with
-  | HK: Val _ = fill ?K _ |- ?P => destruct_inversion K HK
-  end;
-  try
-  match goal with
-  | Hpen: ~ impenetrable_ectx _ _ |- ?P => exfalso; apply Hpen; constructor
-  end)
+    (destruct_inversion K1 Heqe1';
+    try
+    match goal with
+    | HK: Val _ = fill ?K _ |- ?P => destruct_inversion K HK
+    end;
+    try
+    match goal with
+    | Hpen: ~ impenetrable_ectx _ _ |- ?P => exfalso; apply Hpen; constructor
+    end)
   end.
   - assert (fill K1 (EBreak (Val v)) = fill K1 (EBreak (Val v))); auto.
-    replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H1; auto.
-    apply comp_penetrable in H1 as [_ ?].
+    replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H0; auto.
+    apply comp_penetrable in H0 as [_ ?].
     pose proof IHhead_step K1 H H0 as [? _].
-    inversion H1.
+    inversion H2.
   - clear H0 H1 H2.
     repeat split; auto.
     destruct H;
@@ -1361,13 +1295,192 @@ Proof.
     | H: Val _ = fill ?K _ |- ?P => destruct_inversion K H
     | H: fill ?K _ = Val _ |- ?P => destruct_inversion K H
     end.
-  }
-  subst.
+  - assert (fill K1 EContinue = fill K1 EContinue); auto.
+    replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H0; auto.
+    apply comp_penetrable in H0 as [_ ?].
+    pose proof IHhead_step K1 H H0 as [? _].
+    inversion H2.
+  - clear H0 H1 H2.
+    repeat split; auto.
+    destruct H;
+    [exfalso | repeat f_equal | exfalso];
+    revert K1 Heqe1';
+    induction K; intros; simpl in *; destruct_inversion K1 Heqe1'; auto;
+    try
+    match goal with
+    | H: fill _ _ = fill _ _ |- ?P => apply IHK in H; auto
+    end;
+    try
+    match goal with
+    | H: Val _ = fill ?K _ |- ?P => destruct_inversion K H
+    | H: fill ?K _ = Val _ |- ?P => destruct_inversion K H
+    end.
+  - assert (fill K1 (EReturn (Val v)) = fill K1 (EReturn (Val v))); auto.
+    replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H0; auto.
+    apply comp_penetrable in H0 as [_ ?].
+    pose proof IHhead_step K1 H H0 as [? _].
+    inversion H2.
+  - destruct_inversion K1 H2.
+    destruct_inversion K1 H1.
+  - destruct_inversion K1 H2.
+  - clear H0 H1 H2.
+    repeat split; auto.
+    destruct H;
+    [exfalso | exfalso | repeat f_equal];
+    revert K1 Heqe1';
+    induction K; intros; simpl in *; destruct_inversion K1 Heqe1'; auto;
+    try
+    match goal with
+    | H: fill _ _ = fill _ _ |- ?P => apply IHK in H; auto
+    end;
+    try
+    match goal with
+    | H: Val _ = fill ?K _ |- ?P => destruct_inversion K H
+    | H: fill ?K _ = Val _ |- ?P => destruct_inversion K H
+    end.
+Qed.
+
+Lemma fill_cf_inv e1 e2 K1 K2:
+  is_cf_terminal e1 ->
+  fill K1 e1 = fill K2 e2 ->
+  (∃ v : val, e2 = Val v) ∨ (∃ K3 : ectx, e2 = fill K3 e1).
+Proof.
+  intros H.
+  revert K2.
+  destruct H;
+  induction K1; intros; simpl in *;
+  destruct_inversion K2 H;
+  try apply IHK1 in H0;
+  try apply IHK1 in H1;
+  try apply IHK1 in H2;
+  try apply IHK1 in H3;
+  auto;
+  try 
+  match goal with
+  | HK: Val ?v = fill ?K ?e |- ?P => left; destruct_inversion K HK; eauto
+  | HK: fill ?K ?e = Val ?v |- ?P => left; destruct_inversion K HK; eauto
+  end.
+  - right; exists EmptyCtx; eauto.
+  - right; exists (AppLCtx K1 v2); eauto.
+  - right; exists (AppRCtx e1 K1); eauto.
+  - right; exists (UnOpCtx op K1); eauto.
+  - right; exists (BinOpLCtx op K1 v2); eauto.
+  - right; exists (BinOpRCtx op e1 K1); eauto.
+  - right; exists (IfCtx K1 e1 e0); eauto.
+  - right; exists (PairLCtx K1 v2); eauto.
+  - right; exists (PairRCtx e1 K1); eauto.
+  - right; exists (FstCtx K1); eauto.
+  - right; exists (SndCtx K1); eauto.
+  - right; exists (InjLCtx K1); eauto.
+  - right; exists (InjRCtx K1); eauto.
+  - right; exists (CaseCtx K1 e1 e0); eauto.
+  - right; exists (AllocNLCtx K1 v2); eauto.
+  - right; exists (AllocNRCtx e1 K1); eauto.
+  - right; exists (LoadCtx K1); eauto.
+  - right; exists (StoreLCtx K1 v2); eauto.
+  - right; exists (StoreRCtx e1 K1); eauto.
+  - right; exists (CmpXchgLCtx K1 v1 v2); eauto.
+  - right; exists (CmpXchgMCtx e0 K1 v2); eauto.
+  - right; exists (CmpXchgRCtx e0 e1 K1); eauto.
+  - right; exists (FaaLCtx K1 v2); eauto.
+  - right; exists (FaaRCtx e1 K1); eauto.
+  - right; exists (ResolveLCtx K1 v1 v2); eauto.
+  - right; exists (ResolveMCtx e0 K1 v2); eauto.
+  - right; exists (ResolveRCtx e0 e1 K1); eauto.
+  - right; exists (LoopBCtx eb K1); eauto.
+  - right; exists (BreakCtx K1); eauto.
+  - right; exists (CallCtx K1); eauto.
+  - right; exists (ReturnCtx K1); eauto.
+  
+  - right; exists EmptyCtx; eauto.
+  - right; exists (AppLCtx K1 v2); eauto.
+  - right; exists (AppRCtx e1 K1); eauto.
+  - right; exists (UnOpCtx op K1); eauto.
+  - right; exists (BinOpLCtx op K1 v2); eauto.
+  - right; exists (BinOpRCtx op e1 K1); eauto.
+  - right; exists (IfCtx K1 e1 e0); eauto.
+  - right; exists (PairLCtx K1 v2); eauto.
+  - right; exists (PairRCtx e1 K1); eauto.
+  - right; exists (FstCtx K1); eauto.
+  - right; exists (SndCtx K1); eauto.
+  - right; exists (InjLCtx K1); eauto.
+  - right; exists (InjRCtx K1); eauto.
+  - right; exists (CaseCtx K1 e1 e0); eauto.
+  - right; exists (AllocNLCtx K1 v2); eauto.
+  - right; exists (AllocNRCtx e1 K1); eauto.
+  - right; exists (LoadCtx K1); eauto.
+  - right; exists (StoreLCtx K1 v2); eauto.
+  - right; exists (StoreRCtx e1 K1); eauto.
+  - right; exists (CmpXchgLCtx K1 v1 v2); eauto.
+  - right; exists (CmpXchgMCtx e0 K1 v2); eauto.
+  - right; exists (CmpXchgRCtx e0 e1 K1); eauto.
+  - right; exists (FaaLCtx K1 v2); eauto.
+  - right; exists (FaaRCtx e1 K1); eauto.
+  - right; exists (ResolveLCtx K1 v1 v2); eauto.
+  - right; exists (ResolveMCtx e0 K1 v2); eauto.
+  - right; exists (ResolveRCtx e0 e1 K1); eauto.
+  - right; exists (LoopBCtx eb K1); eauto.
+  - right; exists (BreakCtx K1); eauto.
+  - right; exists (CallCtx K1); eauto.
+  - right; exists (ReturnCtx K1); eauto.
+  
+  - right; exists EmptyCtx; eauto.
+  - right; exists (AppLCtx K1 v2); eauto.
+  - right; exists (AppRCtx e1 K1); eauto.
+  - right; exists (UnOpCtx op K1); eauto.
+  - right; exists (BinOpLCtx op K1 v2); eauto.
+  - right; exists (BinOpRCtx op e1 K1); eauto.
+  - right; exists (IfCtx K1 e1 e0); eauto.
+  - right; exists (PairLCtx K1 v2); eauto.
+  - right; exists (PairRCtx e1 K1); eauto.
+  - right; exists (FstCtx K1); eauto.
+  - right; exists (SndCtx K1); eauto.
+  - right; exists (InjLCtx K1); eauto.
+  - right; exists (InjRCtx K1); eauto.
+  - right; exists (CaseCtx K1 e1 e0); eauto.
+  - right; exists (AllocNLCtx K1 v2); eauto.
+  - right; exists (AllocNRCtx e1 K1); eauto.
+  - right; exists (LoadCtx K1); eauto.
+  - right; exists (StoreLCtx K1 v2); eauto.
+  - right; exists (StoreRCtx e1 K1); eauto.
+  - right; exists (CmpXchgLCtx K1 v1 v2); eauto.
+  - right; exists (CmpXchgMCtx e0 K1 v2); eauto.
+  - right; exists (CmpXchgRCtx e0 e1 K1); eauto.
+  - right; exists (FaaLCtx K1 v2); eauto.
+  - right; exists (FaaRCtx e1 K1); eauto.
+  - right; exists (ResolveLCtx K1 v1 v2); eauto.
+  - right; exists (ResolveMCtx e0 K1 v2); eauto.
+  - right; exists (ResolveRCtx e0 e1 K1); eauto.
+  - right; exists (LoopBCtx eb K1); eauto.
+  - right; exists (BreakCtx K1); eauto.
+  - right; exists (CallCtx K1); eauto.
+  - right; exists (ReturnCtx K1); eauto.
+Qed.
+
+
+Lemma break_penetrable_preservation v K σ1 κ e2 σ2 efs:
+  ¬ impenetrable_ectx (EBreak $ Val v) K ->
+  prim_step (fill K (EBreak $ Val v)) σ1 κ e2 σ2 efs ->
+  σ1 = σ2 /\ κ = [] /\ efs = [] /\
+  exists K', e2 = fill K' (EBreak $ Val v) /\ ¬ impenetrable_ectx (EBreak $ Val v) K'.
+Proof.
+  intros.
+  inversion H0; subst.
+
+  pose proof fill_cf_inv _ _ _ _ (break_is_cft _) H1 as [[v' ?] | [K1 ?]]; subst;
+  [inversion H3; subst; destruct_inversion K1 H2; congruence |].
+
+  rewrite fill_comp in H1.
+
+  apply fill_no_val_inj in H1; auto; subst.
+  
+  apply comp_penetrable in H as [? ?].
+
+  pose proof cf_step_congruence _ _ _ _ _ _ _ (break_is_cft _) H1 H3 as [? [? [? ?]]]; subst.
   repeat split; auto.
   exists K0.
   split; auto.
 Qed.
-
 
 Lemma continue_penetrable_preservation K σ1 κ e2 σ2 efs:
   ¬ impenetrable_ectx EContinue K ->
@@ -1375,7 +1488,23 @@ Lemma continue_penetrable_preservation K σ1 κ e2 σ2 efs:
   σ1 = σ2 /\ κ = [] /\ efs = [] /\
   exists K', e2 = fill K' EContinue /\ ¬ impenetrable_ectx EContinue K'.
 Proof.
-Admitted.
+  intros.
+  inversion H0; subst.
+
+  pose proof fill_cf_inv _ _ _ _ continue_is_cft H1 as [[v' ?] | [K1 ?]]; subst;
+  [inversion H3; subst; destruct_inversion K1 H2; congruence |].
+
+  rewrite fill_comp in H1.
+
+  apply fill_no_val_inj in H1; auto; subst.
+  
+  apply comp_penetrable in H as [? ?].
+
+  pose proof cf_step_congruence _ _ _ _ _ _ _ continue_is_cft H1 H3 as [? [? [? ?]]]; subst.
+  repeat split; auto.
+  exists K0.
+  split; auto.
+Qed.
 
 Lemma return_penetrable_preservation v K σ1 κ e2 σ2 efs:
   ¬ impenetrable_ectx (EReturn $ Val v) K ->
@@ -1383,8 +1512,23 @@ Lemma return_penetrable_preservation v K σ1 κ e2 σ2 efs:
   σ1 = σ2 /\ κ = [] /\ efs = [] /\
   exists K', e2 = fill K' (EReturn $ Val v) /\ ¬ impenetrable_ectx (EReturn $ Val v) K'.
 Proof.
-Admitted.
+  intros.
+  inversion H0; subst.
 
+  pose proof fill_cf_inv _ _ _ _ (return_is_cft _) H1 as [[v' ?] | [K1 ?]]; subst;
+  [inversion H3; subst; destruct_inversion K1 H2; congruence |].
+
+  rewrite fill_comp in H1.
+
+  apply fill_no_val_inj in H1; auto; subst.
+  
+  apply comp_penetrable in H as [? ?].
+
+  pose proof cf_step_congruence _ _ _ _ _ _ _ (return_is_cft _) H1 H3 as [? [? [? ?]]]; subst.
+  repeat split; auto.
+  exists K0.
+  split; auto.
+Qed.
 
 (* (** The following lemma is not provable using the axioms of [ectxi_language].
 The proof requires a case analysis over context items ([destruct i] on the
