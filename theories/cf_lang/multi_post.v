@@ -134,12 +134,14 @@ Proof.
         destruct K; inversion H; subst.
         - simpl in *; subst.
           inversion H1; subst; auto.
-          destruct K; inversion H; subst; try congruence.
+          unfold expr_depth.singleton_ectx in H3.
+          destruct K; inversion H; subst; [inversion H3 |].
           destruct K; inversion H7; simpl in *; subst.
           inversion H0.
         - destruct K; inversion H4; simpl in *; subst.
           inversion H1; subst.
-          destruct K; inversion H2; simpl in *; subst; congruence.
+          unfold expr_depth.singleton_ectx in H4.
+          destruct K; inversion H2; simpl in *; subst; inversion H4.
       }
       subst.
       iFrame "Hs".
@@ -190,17 +192,20 @@ Proof.
         destruct K; inversion H; subst.
         - simpl in *; subst.
           inversion H1; subst; auto.
-          destruct K; inversion H; subst; try congruence.
+          unfold expr_depth.singleton_ectx in H3.
+          destruct K; inversion H; subst; [inversion H3 |].
           destruct K; inversion H7; simpl in *; subst.
           + exfalso; apply H4, BreakImpenLoop.
           + destruct K; inversion H7; subst. inversion H0.
         - destruct K; inversion H4; simpl in *; subst.
           + inversion H1; subst.
-            destruct K; inversion H2; simpl in *; subst; try congruence.
+            unfold expr_depth.singleton_ectx in H4.
+            destruct K; inversion H2; simpl in *; subst; [inversion H4 |].
             destruct K; inversion H7; simpl in *; subst. inversion H3.
           + destruct K; inversion H2; simpl in *; subst.
             inversion H1; subst.
-            destruct K; inversion H2; simpl in *; subst; congruence.
+            unfold expr_depth.singleton_ectx in H5.
+            destruct K; inversion H2; simpl in *; subst; inversion H5.
       }
       subst.
       iFrame "Hs".
@@ -254,12 +259,14 @@ Proof.
         destruct K; inversion H; subst.
         - simpl in *; subst.
           inversion H1; subst; auto.
-          destruct K; inversion H; subst; try congruence.
+          unfold expr_depth.singleton_ectx in H3.
+          destruct K; inversion H; subst; [inversion H3 |].
           destruct K; inversion H7; simpl in *; subst.
           exfalso; apply H4, ContinueImpenLoop.
         - destruct K; inversion H4; simpl in *; subst.
           + inversion H1; subst.
-            destruct K; inversion H2; simpl in *; subst; try congruence.
+            unfold expr_depth.singleton_ectx in H4.
+            destruct K; inversion H2; simpl in *; subst; inversion H4.
       }
       subst.
       iFrame "Hs".
@@ -275,7 +282,8 @@ Proof.
     + iPureIntro. unfold reducible. simpl.
       exists nil, (EReturn v), σ0, nil.
       apply (Ectx_step _ _ _ _ _ _ EmptyCtx (LoopB e0 (EReturn v)) (EReturn v)); auto.
-      apply (CFCtxS (EReturn v) (LoopBCtx e0 EmptyCtx)); [apply return_is_cft | auto |].
+      apply (CFCtxS (EReturn v) (LoopBCtx e0 EmptyCtx));
+      [apply return_is_cft | unfold expr_depth.singleton_ectx; auto |].
       unfold not. intros.
       inversion H; subst.
       destruct K'; simpl in *; inversion H0; subst; try congruence.
@@ -316,16 +324,19 @@ Proof.
         destruct K; inversion H; subst.
         - simpl in *; subst.
           inversion H1; subst; auto.
-          destruct K; inversion H; subst; try congruence.
+          unfold expr_depth.singleton_ectx in H3.
+          destruct K; inversion H; subst; [inversion H3 |].
           destruct K; inversion H7; simpl in *; subst; auto.
           + destruct K; inversion H7; subst. inversion H0.
         - destruct K; inversion H4; simpl in *; subst.
           + inversion H1; subst.
-            destruct K; inversion H2; simpl in *; subst; try congruence.
+            unfold expr_depth.singleton_ectx in H4.
+            destruct K; inversion H2; simpl in *; subst; [inversion H4 |].
             destruct K; inversion H7; simpl in *; subst. inversion H3.
           + destruct K; inversion H2; simpl in *; subst.
             inversion H1; subst.
-            destruct K; inversion H2; simpl in *; subst; congruence.
+            unfold expr_depth.singleton_ectx in H5.
+            destruct K; inversion H2; simpl in *; subst; inversion H5.
       }
       subst.
       iFrame "Hs".
@@ -396,14 +407,19 @@ Proof.
 
     iIntros (e2 σ2 efs0 Hstep) "Hw".
 
+    (* MARK: use fill_step_inv instead of the proof below when using the singleton version *)
+    replace (LoopB e0 e) with (fill (LoopBCtx e0 EmptyCtx) e) in Hstep; auto.
+    pose proof fill_step_inv _ _ _ _ _ _ _ eq Hstep as [e1 [? Hred]]; subst; simpl.
+
     (* DONE: may be used instead of congruence lemma *)
-    assert (exists e1, prim_step e σ1 κ e1 σ2 efs0 /\
+    (* assert (exists e1, prim_step e σ1 κ e1 σ2 efs0 /\
           (e2 = LoopB e0 e1 \/ exists v, e1 = e2 /\ e1 = EReturn $ Val v)) as [e1 [Hred ?]].
     {
       inversion Hstep.
       destruct K; inversion H; simpl in *; subst.
       - inversion H1; subst; inversion eq.
-        destruct K; inversion H; subst; try congruence.
+        unfold expr_depth.singleton_ectx in H3.
+        destruct K; inversion H; subst; [inversion H3 |].
         clear H H3 H6.
         destruct e2'; inversion H0; subst.
         + exfalso. apply H4. apply BreakImpenLoop.
@@ -418,14 +434,15 @@ Proof.
           split.
           * apply Ectx_step with EmptyCtx (fill K (EReturn v)) (EReturn v); auto.
             apply CFCtxS; auto.
-            intros ?; subst.
+            unfold expr_depth.singleton_ectx.
+            destruct_inversion K eq; eauto.
             inversion eq.
           * right. eauto.
       - exists (fill K e2').
         split.
         + apply Ectx_step with K e1' e2'; auto.
         + auto.
-    }
+    } *)
 
     iSpecialize ("H1" $! e1 σ2 efs0 Hred with "Hw").
 
@@ -458,7 +475,10 @@ Proof.
     iDestruct "H1" as "[Hs [Hwp Hefs]]".
     iFrame "Hs". iSplitR "Hefs"; auto.
 
-    destruct H.
+    destruct (to_sval e1) eqn:eq'; [| iApply "IH"; auto].
+    iApply wp_loop_sval; [apply eq' | auto | auto].
+
+    (* destruct H.
     - subst. 
       destruct (to_sval e1) eqn:eq'; [| iApply "IH"; auto].
       iApply wp_loop_sval; [apply eq' | auto | auto].
@@ -466,10 +486,18 @@ Proof.
       repeat rewrite wp_unfold.
       rewrite <- wp_unfold at 1.
       rewrite /wp_pre; simpl.
-      auto.
+      auto. *)
   }
 Qed.
 
+(* TODO: move to lang.v later *)
+Lemma cf_reducible e K σ:
+  is_cf_terminal e ->
+  ¬ impenetrable_ectx e K ->
+  to_sval (fill K e) = None ->
+  reducible (fill K e) σ.
+Proof.
+Admitted.
 
 Lemma wp_bind_sval s e K φn φb φc φr:
   to_sval e = Some s ->
@@ -518,13 +546,15 @@ Proof.
     iSplitR.
     {
       iPureIntro.
-      unfold reducible.
+      apply cf_reducible; auto.
+      apply break_is_cft.
+
+      (* unfold reducible.
       exists nil, (EBreak $ Val v), σ1, nil.
       apply (Ectx_step _ _ _ _ _ _ EmptyCtx (fill K (break v)) (break v)); auto.
       apply CFCtxS; auto.
       - apply break_is_cft.
-      - unfold not. intros; subst.
-        inversion eq.
+      - destruct K; inversion eq; unfold expr_depth.singleton_ectx; eauto. *)
     }
 
     iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
@@ -573,13 +603,16 @@ Proof.
     iSplitR.
     {
       iPureIntro.
-      unfold reducible.
+      apply cf_reducible; auto.
+      apply continue_is_cft.
+
+      (* unfold reducible.
       exists nil, (EContinue), σ1, nil.
       apply (Ectx_step _ _ _ _ _ _ EmptyCtx (fill K EContinue) EContinue); auto.
       apply CFCtxS; auto.
       - apply continue_is_cft.
       - unfold not. intros; subst.
-        inversion eq.
+        inversion eq. *)
     }
 
     iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
@@ -628,13 +661,16 @@ Proof.
     iSplitR.
     {
       iPureIntro.
-      unfold reducible.
+      apply cf_reducible; auto.
+      apply return_is_cft.
+
+      (* unfold reducible.
       exists nil, (EReturn v), σ1, nil.
       apply (Ectx_step _ _ _ _ _ _ EmptyCtx (fill K (EReturn v)) (EReturn v)); auto.
       apply CFCtxS; auto.
       - apply return_is_cft.
       - unfold not. intros; subst.
-        inversion eq.
+        inversion eq. *)
     }
 
     iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
@@ -702,7 +738,7 @@ Proof.
     iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
 
     assert (exists e1, e2 = fill K e1 /\ prim_step e σ1 κ e1 σ2 efs) as [e1 [? Hred]].
-    { eapply fill_step_inv; auto. } subst.
+    { apply fill_step_inv; auto. } subst.
 
     (* destruct H as [κ' [e' [σ' [efs' H]]]].
 
@@ -737,11 +773,7 @@ Proof.
     [iApply (wp_bind_sval s); auto |].
     iApply "IH"; auto.
   }
-  Unshelve.
-Admitted.
-
-Local Ltac destruct_inversion K H :=
-  destruct K; simpl in H; inversion H; subst.
+Qed.
 
 Lemma wp_call_sval s e φ:
   to_sval e = Some s ->
@@ -884,13 +916,15 @@ Proof.
       inversion H; subst.
       destruct K; simpl in *; inversion H0; subst.
       - inversion H2; subst; auto.
-        destruct_inversion K H0; try congruence.
+        unfold expr_depth.singleton_ectx in H4.
+        destruct_inversion K H0; [inversion H4 |].
         destruct_inversion K H7.
         + exfalso. apply H5; constructor.
         + destruct_inversion K H8. inversion H3.
       - destruct_inversion K H3.
         + inversion H2; subst.
-          destruct_inversion K H3; try congruence.
+          unfold expr_depth.singleton_ectx in H5.
+          destruct_inversion K H3; [inversion H5 |].
           destruct_inversion K H8. inversion H4.
         + destruct_inversion K H4. inversion H2; subst.
           destruct_inversion K H4. inversion H5.
@@ -954,7 +988,7 @@ Proof.
     assert (exists e1, e2 = fill (CallCtx EmptyCtx) e1 /\ prim_step e σ1 κ e1 σ2 efs) as [e1 [? Hred]]; subst.
     {
       replace (Call e) with (fill (CallCtx EmptyCtx) e); auto.
-      eapply fill_step_inv; auto.
+      apply fill_step_inv; auto.
     }
     simpl in *.
 
@@ -991,7 +1025,6 @@ Proof.
     [iApply (wp_call_sval s); auto |].
     iApply "IH"; auto.
   }
-  Unshelve.
-Admitted.
+Qed.
 
 End multi_post.

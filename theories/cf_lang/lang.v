@@ -1081,7 +1081,7 @@ Inductive head_step : expr → state → list observation → expr → state →
   (* MARK: a more general step relation substitues all control-flow-context-related steps *)
   | CFCtxS e K σ:
      is_cf_terminal e ->  (* already require parameters of control flow evaluate to values *)
-     ~ K = EmptyCtx ->
+     singleton_ectx K ->
      ~ impenetrable_ectx e K ->
      head_step (fill K e) σ [] e σ [].
 
@@ -1089,6 +1089,7 @@ Lemma sval_head_stuck e1 σ1 κ e2 σ2 efs : head_step e1 σ1 κ e2 σ2 efs → 
 Proof.
   destruct 1; try naive_solver; try (destruct K; naive_solver).
   destruct K; try congruence; try naive_solver.
+  - unfold singleton_ectx in H0; naive_solver.
   - simpl; destruct (fill K e) eqn: HK; auto.
     destruct K; inversion HK.
     simpl in HK. rewrite HK in H.
@@ -1152,6 +1153,7 @@ Proof.
   apply Ectx_step with (comp_ectx K K0) e1' e2'; auto.
 Qed.
 
+(* TODO: *)
 Lemma fill_step_inv K e1' σ1 κ e2 σ2 efs :
   to_sval e1' = None → prim_step (fill K e1') σ1 κ e2 σ2 efs →
   ∃ e2', e2 = fill K e2' ∧ prim_step e1' σ1 κ e2' σ2 efs.
@@ -1487,7 +1489,7 @@ Proof.
   inversion H0; subst.
 
   pose proof fill_cf_inv _ _ _ _ (break_is_cft _) H1 as [[v' ?] | [K1 ?]]; subst;
-  [inversion H3; subst; destruct_inversion K1 H2; congruence |].
+  [inversion H3; subst; destruct_inversion K1 H2; inversion H5 |].
 
   rewrite fill_comp in H1.
 
@@ -1511,7 +1513,7 @@ Proof.
   inversion H0; subst.
 
   pose proof fill_cf_inv _ _ _ _ continue_is_cft H1 as [[v' ?] | [K1 ?]]; subst;
-  [inversion H3; subst; destruct_inversion K1 H2; congruence |].
+  [inversion H3; subst; destruct_inversion K1 H2; inversion H5 |].
 
   rewrite fill_comp in H1.
 
@@ -1535,7 +1537,7 @@ Proof.
   inversion H0; subst.
 
   pose proof fill_cf_inv _ _ _ _ (return_is_cft _) H1 as [[v' ?] | [K1 ?]]; subst;
-  [inversion H3; subst; destruct_inversion K1 H2; congruence |].
+  [inversion H3; subst; destruct_inversion K1 H2; inversion H5 |].
 
   rewrite fill_comp in H1.
 
