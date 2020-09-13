@@ -707,6 +707,136 @@ Fixpoint fill (K : ectx) (e : expr) : expr :=
   | ReturnCtx K => EReturn (fill K e)
   end.
 
+(** Basic properties about the language *)
+Instance fill_inj K : Inj (=) (=) (fill K).
+Proof. induction K; intros ???; simplify_eq/=; auto with f_equal. Qed.
+
+Lemma fill_sval K e :
+  is_Some (to_sval (fill K e)) → is_Some (to_sval e).
+Proof.
+  intros [v ?]. revert H. revert v.
+  induction K; inversion 1.
+  - rewrite H1. eauto.
+  - destruct (fill K e); inversion H1.
+    apply IHK with (SVal v0). eauto.
+  - destruct (fill K e); inversion H1.
+    apply IHK with (SVal v0). eauto.
+Qed.
+
+Lemma fill_val K e :
+  is_Some (to_val (fill K e)) → is_Some (to_val e).
+Proof.
+  intros [v ?]. revert H. revert v.
+  induction K; inversion 1.
+  rewrite H1. eauto.
+Qed.
+
+Lemma fill_not_sval K e:
+  to_sval e = None → to_sval (fill K e) = None.
+Proof.
+  intros.
+  assert (~(is_Some (to_sval e))). {
+    unfold not. rewrite H. apply is_Some_None.
+  }
+  assert (~(is_Some (to_sval (fill K e)))). {
+    unfold not in *. intros. apply fill_sval in H1. auto.
+  }
+  unfold not in H1.
+  destruct (to_sval (fill K e)); auto.
+  exfalso. apply H1. eauto.
+Qed.
+
+Lemma fill_not_val K e:
+  to_val e = None → to_val (fill K e) = None.
+Proof.
+  intros.
+  assert (~(is_Some (to_val e))). {
+    unfold not. rewrite H. apply is_Some_None.
+  }
+  assert (~(is_Some (to_val (fill K e)))). {
+    unfold not in *. intros. apply fill_val in H1. auto.
+  }
+  unfold not in H1.
+  destruct (to_val (fill K e)); auto.
+  exfalso. apply H1. eauto.
+Qed.
+
+Ltac destruct_inversion K H :=
+destruct K; simpl in H; inversion H; subst.
+
+
+Module expr_depth.
+Import Omega.
+Open Scope nat_scope.
+
+Fixpoint expr_depth (e : expr) : nat :=
+  match e with
+  | Val _ | Var _ | Rec _ _ _
+  | NewProph | EContinue => 1
+  | App e1 e2 | Pair e1 e2
+  | BinOp _ e1 e2 | AllocN e1 e2
+  | Store e1 e2 | FAA e1 e2
+    => match (to_val e2) with
+       | Some _ => 1 + expr_depth e1
+       | None  => 1 + expr_depth e2
+       end
+  | UnOp _ e | If e _ _
+  | Fst e | Snd e
+  | InjL e | InjR e
+  | Case e _ _ | Fork e
+  | Load e | LoopB _ e
+  | EBreak e | Call e
+  | EReturn e
+    => 1 + expr_depth e
+  | CmpXchg e0 e1 e2
+  | Resolve e0 e1 e2
+    => match (to_val e1), (to_val e2) with
+       | _, None => 1 + expr_depth e2
+       | None, Some _ => 1 + expr_depth e1
+       | Some _, Some _ => 1 + expr_depth e0
+       end
+  end.
+
+Fixpoint ectx_depth (K : ectx) : nat :=
+  match K with
+  | EmptyCtx => 0 
+  | AppLCtx K _ | AppRCtx _ K
+  | UnOpCtx _ K | BinOpLCtx _ K _
+  | BinOpRCtx _ _ K | IfCtx K _ _
+  | PairLCtx K _ | PairRCtx _ K
+  | FstCtx K | SndCtx K
+  | InjLCtx K | InjRCtx K
+  | CaseCtx K _ _ | AllocNLCtx K _
+  | AllocNRCtx _ K | LoadCtx K
+  | StoreLCtx K _ | StoreRCtx _ K
+  | CmpXchgLCtx K _ _ | CmpXchgMCtx _ K _
+  | CmpXchgRCtx _ _ K | FaaLCtx K _
+  | FaaRCtx _ K | ResolveLCtx K _ _
+  | ResolveMCtx _ K _ | ResolveRCtx _ _ K
+  | LoopBCtx _ K | BreakCtx K
+  | CallCtx K | ReturnCtx K
+    => 1 + ectx_depth K
+  end.
+
+Lemma fill_depth K e :
+  to_val e = None ->
+  expr_depth (fill K e) = (ectx_depth K) + (expr_depth e).
+Proof.
+  intros.
+  (* pose proof fill_not_val K _ H. *)
+  induction K; simpl in *; eauto;
+  try (pose proof fill_not_val K _ H; rewrite H0);
+  try (rewrite IHK; try destruct (to_val e1); eauto).
+Qed.
+
+Definition singleton_ectx K : Prop := ectx_depth K = 1.
+Definition singleton_expr e : Prop := expr_depth e = 1.
+
+Close Scope nat_scope.
+End expr_depth.
+Import expr_depth.
+
+
 (** Substitution *)
 Fixpoint subst (x : string) (v : val) (e : expr)  : expr :=
   match e with
@@ -955,60 +1085,6 @@ Inductive head_step : expr → state → list observation → expr → state →
      ~ impenetrable_ectx e K ->
      head_step (fill K e) σ [] e σ [].
 
-(** Basic properties about the language *)
-Instance fill_inj K : Inj (=) (=) (fill K).
-Proof. induction K; intros ???; simplify_eq/=; auto with f_equal. Qed.
-
-Lemma fill_sval K e :
-  is_Some (to_sval (fill K e)) → is_Some (to_sval e).
-Proof.
-  intros [v ?]. revert H. revert v.
-  induction K; inversion 1.
-  - rewrite H1. eauto.
-  - destruct (fill K e); inversion H1.
-    apply IHK with (SVal v0). eauto.
-  - destruct (fill K e); inversion H1.
-    apply IHK with (SVal v0). eauto.
-Qed.
-
-Lemma fill_val K e :
-  is_Some (to_val (fill K e)) → is_Some (to_val e).
-Proof.
-  intros [v ?]. revert H. revert v.
-  induction K; inversion 1.
-  rewrite H1. eauto.
-Qed.
-
-Lemma fill_not_sval K e:
-  to_sval e = None → to_sval (fill K e) = None.
-Proof.
-  intros.
-  assert (~(is_Some (to_sval e))). {
-    unfold not. rewrite H. apply is_Some_None.
-  }
-  assert (~(is_Some (to_sval (fill K e)))). {
-    unfold not in *. intros. apply fill_sval in H1. auto.
-  }
-  unfold not in H1.
-  destruct (to_sval (fill K e)); auto.
-  exfalso. apply H1. eauto.
-Qed.
-
-Lemma fill_not_val K e:
-  to_val e = None → to_val (fill K e) = None.
-Proof.
-  intros.
-  assert (~(is_Some (to_val e))). {
-    unfold not. rewrite H. apply is_Some_None.
-  }
-  assert (~(is_Some (to_val (fill K e)))). {
-    unfold not in *. intros. apply fill_val in H1. auto.
-  }
-  unfold not in H1.
-  destruct (to_val (fill K e)); auto.
-  exfalso. apply H1. eauto.
-Qed.
-
 Lemma sval_head_stuck e1 σ1 κ e2 σ2 efs : head_step e1 σ1 κ e2 σ2 efs → to_sval e1 = None.
 Proof.
   destruct 1; try naive_solver; try (destruct K; naive_solver).
@@ -1136,73 +1212,10 @@ Lemma prim_step_congruence e e1 e2 σ σ1 σ2 κ1 κ2 efs1 efs2:
 Proof.
 Admitted. *)
 
-Local Ltac destruct_inversion K H :=
-  destruct K; simpl in H; inversion H; subst.
-
-Module expr_depth.
-Canonical Structure aux_lang := Language aux_lang_mixin.
+Module fill_no_val_inj.
+Import expr_depth.
 Import Omega.
-Open Scope nat_scope.
-
-Fixpoint expr_depth (e : expr) : nat :=
-  match e with
-  | Val _ | Var _ | Rec _ _ _
-  | NewProph | EContinue => 1
-  | App e1 e2 | Pair e1 e2
-  | BinOp _ e1 e2 | AllocN e1 e2
-  | Store e1 e2 | FAA e1 e2
-    => match (to_val e2) with
-       | Some _ => 1 + expr_depth e1
-       | None  => 1 + expr_depth e2
-       end
-  | UnOp _ e | If e _ _
-  | Fst e | Snd e
-  | InjL e | InjR e
-  | Case e _ _ | Fork e
-  | Load e | LoopB _ e
-  | EBreak e | Call e
-  | EReturn e
-    => 1 + expr_depth e
-  | CmpXchg e0 e1 e2
-  | Resolve e0 e1 e2
-    => match (to_val e1), (to_val e2) with
-       | _, None => 1 + expr_depth e2
-       | None, Some _ => 1 + expr_depth e1
-       | Some _, Some _ => 1 + expr_depth e0
-       end
-  end.
-
-Fixpoint ectx_depth (K : ectx) : nat :=
-  match K with
-  | EmptyCtx => 0 
-  | AppLCtx K _ | AppRCtx _ K
-  | UnOpCtx _ K | BinOpLCtx _ K _
-  | BinOpRCtx _ _ K | IfCtx K _ _
-  | PairLCtx K _ | PairRCtx _ K
-  | FstCtx K | SndCtx K
-  | InjLCtx K | InjRCtx K
-  | CaseCtx K _ _ | AllocNLCtx K _
-  | AllocNRCtx _ K | LoadCtx K
-  | StoreLCtx K _ | StoreRCtx _ K
-  | CmpXchgLCtx K _ _ | CmpXchgMCtx _ K _
-  | CmpXchgRCtx _ _ K | FaaLCtx K _
-  | FaaRCtx _ K | ResolveLCtx K _ _
-  | ResolveMCtx _ K _ | ResolveRCtx _ _ K
-  | LoopBCtx _ K | BreakCtx K
-  | CallCtx K | ReturnCtx K
-    => 1 + ectx_depth K
-  end.
-
-Lemma fill_depth K e :
-  to_val e = None ->
-  expr_depth (fill K e) = (ectx_depth K) + (expr_depth e).
-Proof.
-  intros.
-  (* pose proof fill_not_val K _ H. *)
-  induction K; simpl in *; eauto;
-  try (pose proof fill_not_val K _ H; rewrite H0);
-  try (rewrite IHK; try destruct (to_val e1); eauto).
-Qed.
+(* Canonical Structure aux_lang := Language aux_lang_mixin. *)
 
 Lemma fill_no_val_inj e K1 K2:
   to_val e = None ->
@@ -1224,9 +1237,8 @@ Proof.
   | HK: Val ?v = fill ?K ?e |- ?P => destruct_inversion K HK; inversion H
   end).
 Qed.
-End expr_depth.
-
-Import expr_depth.
+End fill_no_val_inj.
+Import fill_no_val_inj.
 
 Lemma comp_empty K:
   comp_ectx K EmptyCtx = K.

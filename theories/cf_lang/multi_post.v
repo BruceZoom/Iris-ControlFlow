@@ -54,7 +54,7 @@ Proof.
   assert ((EBreak $ Val v) = (of_sval $ SBreak v)); auto.
   rewrite H.
   iIntros "Hφ".
-  rewrite wp_unfold /wp_pre to_of_val.
+  rewrite wp_unfold /wp_pre language.to_of_val.
   auto.
 Qed.
 
@@ -65,7 +65,7 @@ Proof.
   assert (EContinue = (of_sval SContinue)); auto.
   rewrite H.
   iIntros "Hφ".
-  rewrite wp_unfold /wp_pre to_of_val.
+  rewrite wp_unfold /wp_pre language.to_of_val.
   auto.
 Qed.
 
@@ -76,7 +76,7 @@ Proof.
   assert ((EReturn $ Val v) = (of_sval $ SReturn v)); auto.
   rewrite H.
   iIntros "Hφ".
-  rewrite wp_unfold /wp_pre to_of_val.
+  rewrite wp_unfold /wp_pre language.to_of_val.
   auto.
 Qed.
 
