@@ -1076,6 +1076,12 @@ Proof.
   apply Ectx_step with (comp_ectx K K0) e1' e2'; auto.
 Qed.
 
+Lemma fill_step_inv K e1' σ1 κ e2 σ2 efs :
+  to_sval e1' = None → prim_step (fill K e1') σ1 κ e2 σ2 efs →
+  ∃ e2', e2 = fill K e2' ∧ prim_step e1' σ1 κ e2' σ2 efs.
+Proof.
+Admitted.
+
 (* Lemma fill_item_no_val_inj Ki1 Ki2 e1 e2 :
   to_val e1 = None → to_val e2 = None →
   fill_item Ki1 e1 = fill_item Ki2 e2 → Ki1 = Ki2.

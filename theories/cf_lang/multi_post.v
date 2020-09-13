@@ -740,4 +740,258 @@ Proof.
   Unshelve.
 Admitted.
 
+Local Ltac destruct_inversion K H :=
+  destruct K; simpl in H; inversion H; subst.
+
+Lemma wp_call_sval s e φ:
+  to_sval e = Some s ->
+  WP e {{ φ }} {{ bot }} {{ bot }} {{ φ }} ⊢
+  WP Call e {{ φ }} {{ bot }} {{ bot }} {{ bot }}.
+Proof.
+  iIntros (eq) "H".
+  destruct s; apply of_to_sval in eq; simpl in eq; subst.
+  {
+    rewrite wp_unfold /wp_pre; simpl.
+    rewrite wp_unfold /wp_pre; simpl.
+
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+
+    iIntros (σ1 κ κs _) "Hs Hw".
+    iSpecialize ("H" with "Hw").
+
+    repeat iMod "H".
+    iDestruct "H" as "[Hw [Htop H]]".
+    iApply except_0_bupd.
+    iModIntro.
+    
+    iApply bupd_frame_l.
+    iFrame "Hw".
+    iApply bupd_frame_r.
+    iPoseProof ownE_empty as "Hown_phi".
+    iFrame "Hown_phi".
+
+    iSplitR.
+    {
+      iPureIntro.
+      exists nil, (Val v), σ1, nil.
+      apply Ectx_step with EmptyCtx (Call v) (Val v); eauto.
+      constructor.
+    }
+
+    iIntros (e2 σ2 efs H) "[Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Hphi".
+    iIntros "!# [Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Htop".
+
+    assert (e2 = Val v /\ κ = [] /\ σ2 = σ1 /\ efs = []) as [? [? [? ?]]]; subst.
+    {
+      inversion H; subst.
+      destruct K; simpl in *; inversion H0; subst.
+      - inversion H2; subst; auto.
+        destruct_inversion K H0.
+        + inversion H3.
+        + destruct_inversion K H7; inversion H3.
+      - destruct_inversion K H3. inversion H2; subst.
+        destruct_inversion K H3. inversion H4.
+    }
+
+    iFrame "Hs".
+    iSplitL; auto.
+    rewrite wp_unfold /wp_pre; simpl.
+    auto.
+  }
+  {
+    rewrite wp_unfold /wp_pre; simpl.
+    rewrite wp_unfold /wp_pre; simpl.
+
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+
+    iIntros (? ? ? ?) "? Hw".
+    iSpecialize ("H" with "Hw").
+    repeat iMod "H".
+    iDestruct "H" as "[? [? H]]".
+    iExFalso.
+    auto.
+  }
+  {
+    rewrite wp_unfold /wp_pre; simpl.
+    rewrite wp_unfold /wp_pre; simpl.
+
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+
+    iIntros (? ? ? ?) "? Hw".
+    iSpecialize ("H" with "Hw").
+    repeat iMod "H".
+    iDestruct "H" as "[? [? H]]".
+    iExFalso.
+    auto.
+  }
+  {
+    rewrite wp_unfold /wp_pre; simpl.
+    rewrite wp_unfold /wp_pre; simpl.
+
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+
+    iIntros (σ1 κ κs _) "Hs Hw".
+    iSpecialize ("H" with "Hw").
+
+    repeat iMod "H".
+    iDestruct "H" as "[Hw [Htop H]]".
+    iApply except_0_bupd.
+    iModIntro.
+    
+    iApply bupd_frame_l.
+    iFrame "Hw".
+    iApply bupd_frame_r.
+    iPoseProof ownE_empty as "Hown_phi".
+    iFrame "Hown_phi".
+
+    iSplitR.
+    {
+      iPureIntro.
+      exists nil, (Val v), σ1, nil.
+      apply Ectx_step with EmptyCtx (Call (return v)) (Val v); eauto.
+      constructor.
+    }
+
+    iIntros (e2 σ2 efs H) "[Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Hphi".
+    iIntros "!# [Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Htop".
+
+    assert (e2 = Val v /\ κ = [] /\ σ2 = σ1 /\ efs = []) as [? [? [? ?]]]; subst.
+    {
+      inversion H; subst.
+      destruct K; simpl in *; inversion H0; subst.
+      - inversion H2; subst; auto.
+        destruct_inversion K H0; try congruence.
+        destruct_inversion K H7.
+        + exfalso. apply H5; constructor.
+        + destruct_inversion K H8. inversion H3.
+      - destruct_inversion K H3.
+        + inversion H2; subst.
+          destruct_inversion K H3; try congruence.
+          destruct_inversion K H8. inversion H4.
+        + destruct_inversion K H4. inversion H2; subst.
+          destruct_inversion K H4. inversion H5.
+    }
+
+    iFrame "Hs".
+    iSplitL; auto.
+    rewrite wp_unfold /wp_pre; simpl.
+    auto.
+  }
+Qed.
+
+Lemma tac_wp_call e φ:
+  WP e {{ φ }} {{ bot }} {{ bot }} {{ φ }} ⊢
+  WP Call e {{ φ }} {{ bot }} {{ bot }} {{ bot }}.
+Proof.
+  iIntros "H".
+  destruct (to_sval e) eqn:eq.
+  {
+    iApply (wp_call_sval s); auto.
+  }
+  {
+    iRevert (e eq) "H".
+    iLöb as "IH".
+    iIntros (e eq) "H".
+
+    repeat rewrite wp_unfold.
+    rewrite /wp_pre; simpl.
+    rewrite eq.
+
+    iIntros (σ1 κ κs ?) "Hs".
+    iSpecialize ("H" $! σ1 κ κs a with "Hs").
+
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+
+    iIntros "Hw".
+    iSpecialize ("H" with "Hw").
+    
+    repeat iMod "H".
+    repeat iModIntro.
+
+    iDestruct "H" as "[Hw [Hphi [% H]]]".
+    
+    iFrame "Hw".
+    iFrame "Hphi".
+
+    iSplitR.
+    {
+      iPureIntro.
+      replace (Call e) with (fill (CallCtx EmptyCtx) e); auto.
+      apply my_reducible_fill; auto.
+    }
+
+    iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
+
+
+    assert (exists e1, e2 = fill (CallCtx EmptyCtx) e1 /\ prim_step e σ1 κ e1 σ2 efs) as [e1 [? Hred]]; subst.
+    {
+      replace (Call e) with (fill (CallCtx EmptyCtx) e); auto.
+      eapply fill_step_inv; auto.
+    }
+    simpl in *.
+
+    (* destruct H as [κ' [e' [σ' [efs' H]]]].
+
+    (* DONE: congruence lemma is no longer needed *)
+    pose proof prim_step_congruence _ _ _ _ _ _ _ _ _ _ Hstep
+                                    (fill_step _ _ _ _ _ _ K H) as [? [? [? ?]]].
+    subst. *)
+
+    iCombine ("Hw Hphi") as "Hw".
+    iSpecialize ("H" $! e1 σ2 efs Hred with "Hw").
+
+    repeat iMod "H".
+    iDestruct "H" as "[Hw [Hphi H]]".
+
+
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Hphi".
+
+    iNext.
+
+    iIntros "Hw".
+    iSpecialize ("H" with "Hw").
+
+    repeat iMod "H".
+    repeat iModIntro.
+
+    iDestruct "H" as "[Hw [Htop [Hs [Hwp Hefs]]]]".
+    iFrame "Hw". iFrame "Htop". iFrame "Hs".
+    iSplitR "Hefs"; auto.    
+
+    destruct (to_sval e1) eqn:eq'';
+    [iApply (wp_call_sval s); auto |].
+    iApply "IH"; auto.
+  }
+  Unshelve.
+Admitted.
+
 End multi_post.
