@@ -684,28 +684,22 @@ Proof.
     unfold uPred_fupd.
     rewrite seal_eq.
     unfold uPred_fupd_def.
-    iIntros "[Hw Htop]".
 
-    iApply except_0_bupd.
-    iModIntro.
+    iIntros "Hw".
+    iSpecialize ("H" with "Hw").
     
-    iApply bupd_frame_l.
+    repeat iMod "H".
+    repeat iModIntro.
+
+    iDestruct "H" as "[Hw [Hphi [% H]]]".
+    
     iFrame "Hw".
-    iApply bupd_frame_r.
-    iPoseProof ownE_empty as "Hown_phi".
-    iFrame "Hown_phi".
+    iFrame "Hphi".
 
     iSplitR;
-    [iPureIntro;(* FIXME: apply (reducible_fill _ _ eq H) should work *) admit |].
+    [iPureIntro; apply my_reducible_fill; auto |].
 
     iIntros (e2 σ2 efs Hstep) "[Hw Hphi]".
-    iCombine ("Hw Htop") as "Hw".
-    iSpecialize ("H" with "Hw").
-
-    repeat iMod "H".
-    
-
-    iDestruct "H" as "[Hw [Hphi' [_ H]]]".
 
     assert (exists e1, e2 = fill K e1 /\ prim_step e σ1 κ e1 σ2 efs) as [e1 [? Hred]].
     { eapply fill_step_inv; auto. } subst.
@@ -717,11 +711,11 @@ Proof.
                                     (fill_step _ _ _ _ _ _ K H) as [? [? [? ?]]].
     subst. *)
 
-    iCombine ("Hw Hphi'") as "Hw".
+    iCombine ("Hw Hphi") as "Hw".
     iSpecialize ("H" $! e1 σ2 efs Hred with "Hw").
 
     repeat iMod "H".
-    iDestruct "H" as "[Hw [Hphi' H]]".
+    iDestruct "H" as "[Hw [Hphi H]]".
 
 
     repeat iModIntro.
@@ -743,6 +737,7 @@ Proof.
     [iApply (wp_bind_sval s); auto |].
     iApply "IH"; auto.
   }
+  Unshelve.
 Admitted.
 
 End multi_post.

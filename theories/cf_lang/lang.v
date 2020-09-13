@@ -3,6 +3,7 @@ From stdpp Require Import gmap.
 From iris.algebra Require Export ofe.
 From iris.program_logic Require Export language.
 From iris.heap_lang Require Export locations.
+From Coq.omega Require Omega.
 Set Default Proof Using "Type".
 
 
@@ -1110,7 +1111,6 @@ End cf_lang.
 
 (** Language *)
 Canonical Structure cf_lang := Language cf_lang.cf_lang_mixin.
-Canonical Structure aux_lang := Language cf_lang.aux_lang_mixin.
 
 (* Prefer cf_lang names over ectx_language names. *)
 Export cf_lang.
@@ -1134,7 +1134,8 @@ Local Ltac destruct_inversion K H :=
   destruct K; simpl in H; inversion H; subst.
 
 Module expr_depth.
-From Coq.omega Require Import Omega.
+Canonical Structure aux_lang := Language aux_lang_mixin.
+Import Omega.
 Open Scope nat_scope.
 
 Fixpoint expr_depth (e : expr) : nat :=
@@ -1529,6 +1530,10 @@ Proof.
   exists K0.
   split; auto.
 Qed.
+
+Lemma my_reducible_fill K e σ :
+reducible e σ → reducible (fill K e) σ.
+Proof. unfold reducible in *. naive_solver eauto using fill_step. Qed.
 
 (* (** The following lemma is not provable using the axioms of [ectxi_language].
 The proof requires a case analysis over context items ([destruct i] on the
