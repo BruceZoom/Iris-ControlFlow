@@ -1154,11 +1154,49 @@ Proof.
 Qed.
 
 (* TODO: *)
-Lemma fill_step_inv K e1' σ1 κ e2 σ2 efs :
-  to_sval e1' = None → prim_step (fill K e1') σ1 κ e2 σ2 efs →
-  ∃ e2', e2 = fill K e2' ∧ prim_step e1' σ1 κ e2' σ2 efs.
+Lemma step_by_val K K' e1 e1' σ1 κ e2 σ2 efs :
+  fill K e1 = fill K' e1' →
+  to_sval e1 = None →
+  head_step e1' σ1 κ e2 σ2 efs →
+  ∃ K'', K' = comp_ectx K K''.
 Proof.
+  intros.
+  revert K' H.
+  induction K; simpl; intros; eauto.
+  24:{
+    destruct_inversion K' H.
+    - inversion H1; subst.
+      + admit.
+      + destruct_inversion K0 H.
+        * inversion H4.
+        * 
+  }
+  1:{
+    destruct_inversion K' H.
+    + inversion H1; subst;
+      [destruct_inversion K H; inversion H0 |].
+      destruct_inversion K0 H; [inversion H4 | |].
+      * destruct_inversion K0 H4; simpl in *; subst.
+        destruct_inversion K H3; inversion H0;
+        destruct_inversion K H7; inversion H8.
+      * destruct_inversion K0 H8; inversion H3.
+    + pose proof IHK _ H3 as [K'' ?].
+      exists K''; subst; auto.
+    + destruct_inversion K' H4; inversion H1; subst.
+      destruct_inversion K0 H3; inversion H4.
+  }
 Admitted.
+
+Lemma fill_step_inv K e1 σ1 κ e2 σ2 efs :
+  to_sval e1 = None → prim_step (fill K e1) σ1 κ e2 σ2 efs →
+  ∃ e3, e2 = fill K e3 ∧ prim_step e1 σ1 κ e3 σ2 efs.
+Proof.
+  intros Hnval [K'' e1'' e2'' Heq1 -> Hstep].
+  destruct (step_by_val K K'' e1 e1'' σ1 κ e2'' σ2 efs) as [K' ->]; eauto.
+  rewrite -fill_comp in Heq1; apply (inj (fill _)) in Heq1.
+  exists (fill K' e2''); rewrite -fill_comp; split; auto; subst.
+  apply Ectx_step with K' e1'' e2''; auto.
+Qed.
 
 (* Lemma fill_item_no_val_inj Ki1 Ki2 e1 e2 :
   to_val e1 = None → to_val e2 = None →
