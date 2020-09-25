@@ -514,15 +514,7 @@ Proof.
         apply comp_penetrable in H0 as [_ ?]; auto.
         apply my_reducible_fill; auto.
     }
-    24:{
-      destruct (to_sval (fill K (break v))) eqn:eq.
-      - destruct_inversion K eq.
-        + admit.
-        + destruct_inversion K H2.
-        + destruct_inversion K H2.
-      - admit.
-    }
-    25:{
+    23:{
       destruct (to_sval (fill K (break v))) eqn:eq.
       - destruct K; simpl in eq; inversion eq.
         + exists nil, (Val v), σ, nil. simpl.
@@ -535,7 +527,7 @@ Proof.
         apply comp_penetrable in H0 as [_ ?].
         apply my_reducible_fill; auto.
     }
-    26:{
+    (* 26:{
       destruct (to_sval (fill K (break v))) eqn:eq.
       - destruct_inversion K eq.
         + exfalso. apply H0. constructor.
@@ -544,8 +536,7 @@ Proof.
       - replace (CallCtx K) with (comp_ectx (CallCtx EmptyCtx) K) in H0; auto.
         apply comp_penetrable in H0 as [? _].
         exfalso. apply H. constructor.
-    }
-  }
+    } *)
 Admitted.
 
 Lemma wp_bind_sval s e K φn φb φc φr:

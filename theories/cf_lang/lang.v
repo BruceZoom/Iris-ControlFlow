@@ -23,7 +23,8 @@ behavior. So we erase to the poison value instead, making sure that no legal
 comparisons could be affected. *)
 Inductive base_lit : Set :=
   | LitInt (n : Z) | LitBool (b : bool) | LitUnit | LitPoison
-  | LitLoc (l : loc) | LitProphecy (p: proph_id).
+  | LitLoc (l : loc).
+   (* | LitProphecy (p: proph_id). *)
 Inductive un_op : Set :=
   | NegOp | MinusUnOp.
 Inductive bin_op : Set :=
@@ -61,8 +62,8 @@ Inductive expr :=
   | CmpXchg (e0 : expr) (e1 : expr) (e2 : expr) (* Compare-exchange *)
   | FAA (e1 : expr) (e2 : expr) (* Fetch-and-add *)
   (* Prophecy *)
-  | NewProph
-  | Resolve (e0 : expr) (e1 : expr) (e2 : expr) (* wrapped expr, proph, val *)
+  (* | NewProph *)
+  (* | Resolve (e0 : expr) (e1 : expr) (e2 : expr) (* wrapped expr, proph, val *) *)
   (* MARK: Control Flow: Loop *)
   | LoopB (eb : expr) (e : expr)    (* loop body: original loop body, expression remains in the current iteration *)
   | EBreak (e : expr)
@@ -158,7 +159,8 @@ Definition lit_is_unboxed (l: base_lit) : Prop :=
   match l with
   (** Disallow comparing (erased) prophecies with (erased) prophecies, by
   considering them boxed. *)
-  | LitProphecy _ | LitPoison => False
+  (* | LitProphecy _  *)
+  | LitPoison => False
   | _ => True
   end.
 Definition val_is_unboxed (v : val) : Prop :=
@@ -254,9 +256,9 @@ Proof.
         cast_if_and3 (decide (e0 = e0')) (decide (e1 = e1')) (decide (e2 = e2'))
      | FAA e1 e2, FAA e1' e2' =>
         cast_if_and (decide (e1 = e1')) (decide (e2 = e2'))
-     | NewProph, NewProph => left _
-     | Resolve e0 e1 e2, Resolve e0' e1' e2' =>
-        cast_if_and3 (decide (e0 = e0')) (decide (e1 = e1')) (decide (e2 = e2'))
+     (* | NewProph, NewProph => left _ *)
+     (* | Resolve e0 e1 e2, Resolve e0' e1' e2' => *)
+        (* cast_if_and3 (decide (e0 = e0')) (decide (e1 = e1')) (decide (e2 = e2')) *)
      (* MARK: new rules for new expressions *)
      | LoopB eb e, LoopB eb' e' =>
         cast_if_and (decide (eb = eb')) (decide (e = e'))
@@ -287,19 +289,19 @@ Proof. solve_decision. Defined.
 Instance base_lit_countable : Countable base_lit.
 Proof.
  refine (inj_countable' (λ l, match l with
-  | LitInt n => (inl (inl n), None)
-  | LitBool b => (inl (inr b), None)
-  | LitUnit => (inr (inl false), None)
-  | LitPoison => (inr (inl true), None)
-  | LitLoc l => (inr (inr l), None)
-  | LitProphecy p => (inr (inl false), Some p)
+  | LitInt n => (inl (inl n))
+  | LitBool b => (inl (inr b))
+  | LitUnit => (inr (inl false))
+  | LitPoison => (inr (inl true))
+  | LitLoc l => (inr (inr l))
+  (* | LitProphecy p => (inr (inl false), Some p) *)
   end) (λ l, match l with
-  | (inl (inl n), None) => LitInt n
-  | (inl (inr b), None) => LitBool b
-  | (inr (inl false), None) => LitUnit
-  | (inr (inl true), None) => LitPoison
-  | (inr (inr l), None) => LitLoc l
-  | (_, Some p) => LitProphecy p
+  | (inl (inl n)) => LitInt n
+  | (inl (inr b)) => LitBool b
+  | (inr (inl false)) => LitUnit
+  | (inr (inl true)) => LitPoison
+  | (inr (inr l)) => LitLoc l
+  (* | (_, Some p) => LitProphecy p *)
   end) _); by intros [].
 Qed.
 Instance un_op_finite : Countable un_op.
@@ -343,8 +345,8 @@ Proof.
      | Store e1 e2 => GenNode 15 [go e1; go e2]
      | CmpXchg e0 e1 e2 => GenNode 16 [go e0; go e1; go e2]
      | FAA e1 e2 => GenNode 17 [go e1; go e2]
-     | NewProph => GenNode 18 []
-     | Resolve e0 e1 e2 => GenNode 19 [go e0; go e1; go e2]
+     (* | NewProph => GenNode 18 [] *)
+     (* | Resolve e0 e1 e2 => GenNode 19 [go e0; go e1; go e2] *)
      (* MARK: new rules for new expressions *)
      | LoopB eb e => GenNode 20 [go eb; go e]
      | EBreak e => GenNode 21 [go e]
@@ -384,8 +386,8 @@ Proof.
      | GenNode 15 [e1; e2] => Store (go e1) (go e2)
      | GenNode 16 [e0; e1; e2] => CmpXchg (go e0) (go e1) (go e2)
      | GenNode 17 [e1; e2] => FAA (go e1) (go e2)
-     | GenNode 18 [] => NewProph
-     | GenNode 19 [e0; e1; e2] => Resolve (go e0) (go e1) (go e2)
+     (* | GenNode 18 [] => NewProph *)
+     (* | GenNode 19 [e0; e1; e2] => Resolve (go e0) (go e1) (go e2) *)
      (* MARK: new rules for new expressions *)
      | GenNode 20 [eb; e] => LoopB (go eb) (go e)
      | GenNode 21 [e] => EBreak (go e)
@@ -406,7 +408,7 @@ Proof.
    for go).
  refine (inj_countable' enc dec _).
  refine (fix go (e : expr) {struct e} := _ with gov (v : val) {struct v} := _ for go).
- - destruct e as [v | | | | | | | | | | | | | | | | | | | | | | | | | ]; simpl; f_equal;
+ - destruct e as [v | | | | | | | | | | | | | | | | | | | | | | | ]; simpl; f_equal;
      [exact (gov v)|done..].
  - destruct v; by f_equal.
 Qed.
@@ -456,9 +458,9 @@ Inductive ctx' :=
   | FaaLCtx' (K : ctx') (e2 : expr)
   | FaaRCtx' (e1 : expr) (K : ctx')
   (* TODO: possible problems with the resolve context *)
-  | ResolveLCtx' (K : ctx') (e1 : expr) (e2 : expr)
-  | ResolveMCtx' (e0 : expr) (K : ctx') (e2 : expr)
-  | ResolveRCtx' (e0 : expr) (e1 : expr) (K : ctx')
+  (* | ResolveLCtx' (K : ctx') (e1 : expr) (e2 : expr) *)
+  (* | ResolveMCtx' (e0 : expr) (K : ctx') (e2 : expr) *)
+  (* | ResolveRCtx' (e0 : expr) (e1 : expr) (K : ctx') *)
   (* MARK: new contexts *)
   | LoopBCtx' (eb : expr) (K : ctx')
   | BreakCtx' (K : ctx')
@@ -492,9 +494,9 @@ Fixpoint comp_ctx' (K1 K2 : ctx') : ctx' :=
   | FaaLCtx' K e2 => FaaLCtx' (comp_ctx' K K2) e2
   | FaaRCtx' e1 K => FaaRCtx' e1 (comp_ctx' K K2)
   (* TODO: possible problems with the resolve context *)
-  | ResolveLCtx' K e1 e2 => ResolveLCtx' (comp_ctx' K K2) e1 e2
-  | ResolveMCtx' e0 K e2 => ResolveMCtx' e0 (comp_ctx' K K2) e2
-  | ResolveRCtx' e0 e1 K => ResolveRCtx' e0 e1 (comp_ctx' K K2)
+  (* | ResolveLCtx' K e1 e2 => ResolveLCtx' (comp_ctx' K K2) e1 e2 *)
+  (* | ResolveMCtx' e0 K e2 => ResolveMCtx' e0 (comp_ctx' K K2) e2 *)
+  (* | ResolveRCtx' e0 e1 K => ResolveRCtx' e0 e1 (comp_ctx' K K2) *)
   (* MARK: new contexts *)
   | LoopBCtx' eb K => LoopBCtx' eb (comp_ctx' K K2)
   | BreakCtx' K => BreakCtx' (comp_ctx' K K2)
@@ -559,9 +561,9 @@ Fixpoint fill' (K : ctx') (e : expr) : expr :=
   | CmpXchgRCtx' e0 e1 K => CmpXchg e0 e1 (fill' K e)
   | FaaLCtx' K e2 => FAA (fill' K e) e2
   | FaaRCtx' e1 K => FAA e1 (fill' K e)
-  | ResolveLCtx' K e1 e2 => Resolve (fill' K e) e1 e2
-  | ResolveMCtx' ex K e2 => Resolve ex (fill' K e) e2
-  | ResolveRCtx' ex e1 K => Resolve ex e1 (fill' K e)
+  (* | ResolveLCtx' K e1 e2 => Resolve (fill' K e) e1 e2 *)
+  (* | ResolveMCtx' ex K e2 => Resolve ex (fill' K e) e2 *)
+  (* | ResolveRCtx' ex e1 K => Resolve ex e1 (fill' K e) *)
   (* MARK: new rules for new contexts *)
   | LoopBCtx' eb K => LoopB eb (fill' K e)
   | BreakCtx' K => EBreak (fill' K e)
@@ -601,9 +603,9 @@ Inductive ectx :=
   | FaaLCtx (K : ectx) (v2 : val)
   | FaaRCtx (e1 : expr) (K : ectx)
   (* TODO: possible problems with the resolve context *)
-  | ResolveLCtx (K : ectx) (v1 : val) (v2 : val)
-  | ResolveMCtx (e0 : expr) (K : ectx) (v2 : val)
-  | ResolveRCtx (e0 : expr) (e1 : expr) (K : ectx)
+  (* | ResolveLCtx (K : ectx) (v1 : val) (v2 : val) *)
+  (* | ResolveMCtx (e0 : expr) (K : ectx) (v2 : val) *)
+  (* | ResolveRCtx (e0 : expr) (e1 : expr) (K : ectx) *)
   (* MARK: new contexts *)
   | LoopBCtx (eb : expr) (K : ectx)
   | BreakCtx (K : ectx)
@@ -637,9 +639,9 @@ Fixpoint comp_ectx (K1 K2 : ectx) : ectx :=
   | FaaLCtx K v2 => FaaLCtx (comp_ectx K K2) v2
   | FaaRCtx e1 K => FaaRCtx e1 (comp_ectx K K2)
   (* TODO: possible problems with the resolve context *)
-  | ResolveLCtx K v1 v2 => ResolveLCtx (comp_ectx K K2) v1 v2
-  | ResolveMCtx e0 K v2 => ResolveMCtx e0 (comp_ectx K K2) v2
-  | ResolveRCtx e0 e1 K => ResolveRCtx e0 e1 (comp_ectx K K2)
+  (* | ResolveLCtx K v1 v2 => ResolveLCtx (comp_ectx K K2) v1 v2 *)
+  (* | ResolveMCtx e0 K v2 => ResolveMCtx e0 (comp_ectx K K2) v2 *)
+  (* | ResolveRCtx e0 e1 K => ResolveRCtx e0 e1 (comp_ectx K K2) *)
   (* MARK: new contexts *)
   | LoopBCtx eb K => LoopBCtx eb (comp_ectx K K2)
   | BreakCtx K => BreakCtx (comp_ectx K K2)
@@ -697,9 +699,9 @@ Fixpoint fill (K : ectx) (e : expr) : expr :=
   | CmpXchgRCtx e0 e1 K => CmpXchg e0 e1 (fill K e)
   | FaaLCtx K v2 => FAA (fill K e) (Val v2)
   | FaaRCtx e1 K => FAA e1 (fill K e)
-  | ResolveLCtx K v1 v2 => Resolve (fill K e) (Val v1) (Val v2)
-  | ResolveMCtx ex K v2 => Resolve ex (fill K e) (Val v2)
-  | ResolveRCtx ex e1 K => Resolve ex e1 (fill K e)
+  (* | ResolveLCtx K v1 v2 => Resolve (fill K e) (Val v1) (Val v2) *)
+  (* | ResolveMCtx ex K v2 => Resolve ex (fill K e) (Val v2) *)
+  (* | ResolveRCtx ex e1 K => Resolve ex e1 (fill K e) *)
   (* MARK: new rules for new contexts *)
   | LoopBCtx eb K => LoopB eb (fill K e)
   | BreakCtx K => EBreak (fill K e)
@@ -772,7 +774,8 @@ Open Scope nat_scope.
 Fixpoint expr_depth (e : expr) : nat :=
   match e with
   | Val _ | Var _ | Rec _ _ _
-  | NewProph | EContinue => 1
+  (* | NewProph  *)
+  | EContinue => 1
   | App e1 e2 | Pair e1 e2
   | BinOp _ e1 e2 | AllocN e1 e2
   | Store e1 e2 | FAA e1 e2
@@ -789,7 +792,7 @@ Fixpoint expr_depth (e : expr) : nat :=
   | EReturn e
     => 1 + expr_depth e
   | CmpXchg e0 e1 e2
-  | Resolve e0 e1 e2
+  (* | Resolve e0 e1 e2 *)
     => match (to_val e1), (to_val e2) with
        | _, None => 1 + expr_depth e2
        | None, Some _ => 1 + expr_depth e1
@@ -811,8 +814,8 @@ Fixpoint ectx_depth (K : ectx) : nat :=
   | StoreLCtx K _ | StoreRCtx _ K
   | CmpXchgLCtx K _ _ | CmpXchgMCtx _ K _
   | CmpXchgRCtx _ _ K | FaaLCtx K _
-  | FaaRCtx _ K | ResolveLCtx K _ _
-  | ResolveMCtx _ K _ | ResolveRCtx _ _ K
+  | FaaRCtx _ K
+  (* | ResolveLCtx K _ _ | ResolveMCtx _ K _ | ResolveRCtx _ _ K *)
   | LoopBCtx _ K | BreakCtx K
   | CallCtx K | ReturnCtx K
     => 1 + ectx_depth K
@@ -860,8 +863,8 @@ Fixpoint subst (x : string) (v : val) (e : expr)  : expr :=
   | Store e1 e2 => Store (subst x v e1) (subst x v e2)
   | CmpXchg e0 e1 e2 => CmpXchg (subst x v e0) (subst x v e1) (subst x v e2)
   | FAA e1 e2 => FAA (subst x v e1) (subst x v e2)
-  | NewProph => NewProph
-  | Resolve ex e1 e2 => Resolve (subst x v ex) (subst x v e1) (subst x v e2)
+  (* | NewProph => NewProph *)
+  (* | Resolve ex e1 e2 => Resolve (subst x v ex) (subst x v e1) (subst x v e2) *)
   (* MARK: new rules for new expressions *)
   | LoopB eb e => LoopB (subst x v eb) (subst x v e)  (* TODO: not sure wether to subst eb *)
   | EBreak e => EBreak (subst x v e)
@@ -1056,7 +1059,7 @@ Inductive head_step : expr → state → list observation → expr → state →
                []
                (Val $ LitV $ LitInt i1) (state_upd_heap <[l:=LitV (LitInt (i1 + i2))]>σ)
                []
-  | NewProphS σ p :
+  (* | NewProphS σ p :
      p ∉ σ.(used_proph_id) →
      head_step NewProph σ
                []
@@ -1065,7 +1068,7 @@ Inductive head_step : expr → state → list observation → expr → state →
   | ResolveS p v e σ w σ' κs ts :
      head_step e σ κs (Val v) σ' ts →
      head_step (Resolve e (Val $ LitV $ LitProphecy p) (Val w)) σ
-               (κs ++ [(p, (v, w))]) (Val v) σ' ts
+               (κs ++ [(p, (v, w))]) (Val v) σ' ts *)
   (* MARK: new head reductions for new expressions *)
   | LoopBS eb σ v:
     head_step (LoopB eb (Val v)) σ [] (LoopB eb eb) σ []   
@@ -1163,7 +1166,7 @@ Proof.
   intros.
   revert K' H.
   induction K; simpl; intros; eauto.
-  24:{
+  (* 24:{
     destruct_inversion K' H.
     - inversion H1; subst.
       + admit.
@@ -1184,7 +1187,7 @@ Proof.
       exists K''; subst; auto.
     + destruct_inversion K' H4; inversion H1; subst.
       destruct_inversion K0 H3; inversion H4.
-  }
+  } *)
 Admitted.
 
 Lemma fill_step_inv K e1 σ1 κ e2 σ2 efs :
@@ -1215,10 +1218,10 @@ Proof.
   by apply fresh_locs_fresh.
 Qed.
 
-Lemma new_proph_id_fresh σ :
+(* Lemma new_proph_id_fresh σ :
   let p := fresh σ.(used_proph_id) in
   head_step NewProph σ [] (Val $ LitV $ LitProphecy p) (state_upd_used_proph_id ({[ p ]} ∪.) σ) [].
-Proof. constructor. apply is_fresh. Qed.
+Proof. constructor. apply is_fresh. Qed. *)
 
 Lemma cf_lang_mixin : LanguageMixin of_sval to_sval prim_step.
 Proof.
@@ -1334,11 +1337,11 @@ Proof.
     | Hpen: ~ impenetrable_ectx _ _ |- ?P => exfalso; apply Hpen; constructor
     end)
   end.
-  - assert (fill K1 (EBreak (Val v)) = fill K1 (EBreak (Val v))); auto.
+  (* - assert (fill K1 (EBreak (Val v)) = fill K1 (EBreak (Val v))); auto.
     replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H0; auto.
     apply comp_penetrable in H0 as [_ ?].
     pose proof IHhead_step K1 H H0 as [? _].
-    inversion H2.
+    inversion H2. *)
   - clear H0 H1 H2.
     repeat split; auto.
     destruct H;
@@ -1354,11 +1357,11 @@ Proof.
     | H: Val _ = fill ?K _ |- ?P => destruct_inversion K H
     | H: fill ?K _ = Val _ |- ?P => destruct_inversion K H
     end.
-  - assert (fill K1 EContinue = fill K1 EContinue); auto.
+  (* - assert (fill K1 EContinue = fill K1 EContinue); auto.
     replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H0; auto.
     apply comp_penetrable in H0 as [_ ?].
     pose proof IHhead_step K1 H H0 as [? _].
-    inversion H2.
+    inversion H2. *)
   - clear H0 H1 H2.
     repeat split; auto.
     destruct H;
@@ -1374,11 +1377,11 @@ Proof.
     | H: Val _ = fill ?K _ |- ?P => destruct_inversion K H
     | H: fill ?K _ = Val _ |- ?P => destruct_inversion K H
     end.
-  - assert (fill K1 (EReturn (Val v)) = fill K1 (EReturn (Val v))); auto.
+  (* - assert (fill K1 (EReturn (Val v)) = fill K1 (EReturn (Val v))); auto.
     replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H0; auto.
     apply comp_penetrable in H0 as [_ ?].
     pose proof IHhead_step K1 H H0 as [? _].
-    inversion H2.
+    inversion H2. *)
   - destruct_inversion K1 H2.
     destruct_inversion K1 H1.
   - destruct_inversion K1 H2.
@@ -1443,9 +1446,9 @@ Proof.
   - right; exists (CmpXchgRCtx e0 e1 K1); eauto.
   - right; exists (FaaLCtx K1 v2); eauto.
   - right; exists (FaaRCtx e1 K1); eauto.
-  - right; exists (ResolveLCtx K1 v1 v2); eauto.
-  - right; exists (ResolveMCtx e0 K1 v2); eauto.
-  - right; exists (ResolveRCtx e0 e1 K1); eauto.
+  (* - right; exists (ResolveLCtx K1 v1 v2); eauto. *)
+  (* - right; exists (ResolveMCtx e0 K1 v2); eauto. *)
+  (* - right; exists (ResolveRCtx e0 e1 K1); eauto. *)
   - right; exists (LoopBCtx eb K1); eauto.
   - right; exists (BreakCtx K1); eauto.
   - right; exists (CallCtx K1); eauto.
@@ -1475,9 +1478,9 @@ Proof.
   - right; exists (CmpXchgRCtx e0 e1 K1); eauto.
   - right; exists (FaaLCtx K1 v2); eauto.
   - right; exists (FaaRCtx e1 K1); eauto.
-  - right; exists (ResolveLCtx K1 v1 v2); eauto.
-  - right; exists (ResolveMCtx e0 K1 v2); eauto.
-  - right; exists (ResolveRCtx e0 e1 K1); eauto.
+  (* - right; exists (ResolveLCtx K1 v1 v2); eauto. *)
+  (* - right; exists (ResolveMCtx e0 K1 v2); eauto. *)
+  (* - right; exists (ResolveRCtx e0 e1 K1); eauto. *)
   - right; exists (LoopBCtx eb K1); eauto.
   - right; exists (BreakCtx K1); eauto.
   - right; exists (CallCtx K1); eauto.
@@ -1507,9 +1510,9 @@ Proof.
   - right; exists (CmpXchgRCtx e0 e1 K1); eauto.
   - right; exists (FaaLCtx K1 v2); eauto.
   - right; exists (FaaRCtx e1 K1); eauto.
-  - right; exists (ResolveLCtx K1 v1 v2); eauto.
-  - right; exists (ResolveMCtx e0 K1 v2); eauto.
-  - right; exists (ResolveRCtx e0 e1 K1); eauto.
+  (* - right; exists (ResolveLCtx K1 v1 v2); eauto. *)
+  (* - right; exists (ResolveMCtx e0 K1 v2); eauto. *)
+  (* - right; exists (ResolveRCtx e0 e1 K1); eauto. *)
   - right; exists (LoopBCtx eb K1); eauto.
   - right; exists (BreakCtx K1); eauto.
   - right; exists (CallCtx K1); eauto.
