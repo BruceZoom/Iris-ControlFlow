@@ -1156,7 +1156,6 @@ Proof.
   apply Ectx_step with (comp_ectx K K0) e1' e2'; auto.
 Qed.
 
-(* TODO: *)
 Lemma step_by_val K K' e1 e1' σ1 κ e2 σ2 efs :
   fill K e1 = fill K' e1' →
   to_sval e1 = None →
@@ -1165,30 +1164,60 @@ Lemma step_by_val K K' e1 e1' σ1 κ e2 σ2 efs :
 Proof.
   intros.
   revert K' H.
-  induction K; simpl; intros; eauto.
-  (* 24:{
-    destruct_inversion K' H.
-    - inversion H1; subst.
-      + admit.
-      + destruct_inversion K0 H.
-        * inversion H4.
-        * 
-  }
-  1:{
-    destruct_inversion K' H.
-    + inversion H1; subst;
-      [destruct_inversion K H; inversion H0 |].
-      destruct_inversion K0 H; [inversion H4 | |].
-      * destruct_inversion K0 H4; simpl in *; subst.
-        destruct_inversion K H3; inversion H0;
-        destruct_inversion K H7; inversion H8.
-      * destruct_inversion K0 H8; inversion H3.
-    + pose proof IHK _ H3 as [K'' ?].
-      exists K''; subst; auto.
-    + destruct_inversion K' H4; inversion H1; subst.
-      destruct_inversion K0 H3; inversion H4.
-  } *)
-Admitted.
+  induction K; simpl; intros; eauto;
+  destruct_inversion K' H;
+  try match goal with
+  | H: fill ?K1 ?e1 = fill ?K2 ?e2 |- ?P => pose proof IHK _ H as [? ?]; subst; eauto
+  end;
+  try match goal with
+  | H0: Val _ = fill ?K ?e, H1: head_step ?e _ _ _ _ _ |- ?P =>
+    destruct_inversion K H0; inversion H1; subst;
+    match goal with
+    | H0: fill ?K ?e = Val _, H1: is_cf_terminal ?e |- ?P =>
+      destruct_inversion K H0; inversion H1
+    end
+  end;
+  try match goal with
+  | H0: fill ?K ?e = Val _, H1: to_sval ?e = None |- ?P =>
+    destruct_inversion K H0; inversion H1
+  end;
+  inversion H1; subst;
+  try match goal with
+  | H: Val _ = fill ?K ?e, H0: to_sval _ = None |- ?P =>
+    destruct_inversion K H; inversion H0
+  end;
+  try match goal with
+  | H: fill ?K ?e = _, H0: singleton_ectx _ |- ?P =>
+    destruct_inversion K H;
+    unfold singleton_ectx in H0; simpl H0; inversion H0;
+    destruct_inversion K0 H0;
+    try match goal with
+    | H: fill EmptyCtx _ = fill ?K _, H0: is_cf_terminal _,
+      H1: to_sval _ = None |- ?P =>
+      simpl in H; subst; destruct_inversion K H0; inversion H1;
+      match goal with
+      | H: Val _ = fill ?K _, H0: to_sval _ = None |- ?P =>
+        destruct_inversion K H; inversion H0
+      end
+    end;
+    try match goal with
+    | H: fill EmptyCtx ?e = Val _, H0: is_cf_terminal ?e |- ?P =>
+      simpl in H; subst; inversion H0
+    end
+  end;
+  try match goal with
+  | H: Val _ = fill ?K _, H0: to_sval _ = None |- ?P =>
+    destruct_inversion K H; inversion H0
+  end;
+  try match goal with
+  | H: _ = fill ?K _, H0: to_sval _ = None |- ?P =>
+    destruct_inversion K H; inversion H0;
+    match goal with
+    | H: Val _ = fill ?K _ |- ?P =>
+      destruct_inversion K H; inversion H0
+    end
+  end.
+Qed.
 
 Lemma fill_step_inv K e1 σ1 κ e2 σ2 efs :
   to_sval e1 = None → prim_step (fill K e1) σ1 κ e2 σ2 efs →
