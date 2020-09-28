@@ -490,55 +490,6 @@ Proof.
   }
 Qed.
 
-(* TODO: move to lang.v *)
-Lemma cf_reducible e K σ:
-  is_cf_terminal e ->
-  ¬ impenetrable_ectx e K ->
-  to_sval (fill K e) = None ->
-  reducible (fill K e) σ.
-Proof.
-  intros.
-  destruct H.
-  {
-    induction K; simpl in H1; inversion H1.
-    1:{ 
-      destruct (to_sval (fill K (break v))) eqn:eq.
-      - destruct K; simpl in eq; inversion eq.
-        + exists nil, (EBreak (Val v)), σ, nil.
-          apply Ectx_step with EmptyCtx (fill (AppLCtx EmptyCtx v2) (EBreak (Val v))) (EBreak (Val v)); auto.
-          constructor; [apply break_is_cft | unfold expr_depth.singleton_ectx |]; auto.
-        + destruct K; inversion H2.
-        + destruct K; inversion H2.
-      - replace (fill (AppLCtx K v2) (EBreak $ Val v)) with (fill (AppLCtx EmptyCtx v2) (fill K (EBreak $ Val v))); auto.
-        replace (AppLCtx K v2) with (comp_ectx (AppLCtx EmptyCtx v2) K) in H0; auto.
-        apply comp_penetrable in H0 as [_ ?]; auto.
-        apply my_reducible_fill; auto.
-    }
-    23:{
-      destruct (to_sval (fill K (break v))) eqn:eq.
-      - destruct K; simpl in eq; inversion eq.
-        + exists nil, (Val v), σ, nil. simpl.
-          apply Ectx_step with EmptyCtx (LoopB eb (EBreak $ Val v)) (Val v); auto.
-          constructor.
-        + destruct K; inversion H2.
-        + destruct_inversion K H2.
-      - replace (fill (LoopBCtx eb K) (EBreak $ Val v)) with (fill (LoopBCtx eb EmptyCtx) (fill K (EBreak $ Val v))); auto.
-        replace (LoopBCtx eb K) with (comp_ectx (LoopBCtx eb EmptyCtx) K) in H0; auto.
-        apply comp_penetrable in H0 as [_ ?].
-        apply my_reducible_fill; auto.
-    }
-    (* 26:{
-      destruct (to_sval (fill K (break v))) eqn:eq.
-      - destruct_inversion K eq.
-        + exfalso. apply H0. constructor.
-        + destruct_inversion K H2.
-        + destruct_inversion K H2.
-      - replace (CallCtx K) with (comp_ectx (CallCtx EmptyCtx) K) in H0; auto.
-        apply comp_penetrable in H0 as [? _].
-        exfalso. apply H. constructor.
-    } *)
-Admitted.
-
 Lemma wp_bind_sval s e K φn φb φc φr:
   to_sval e = Some s ->
   WP e {{ λ v, (WP (fill K (Val v)) {{ φn }} {{ φb }} {{ φc }} {{ φr }}) }}

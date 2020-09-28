@@ -1168,16 +1168,12 @@ Proof.
   destruct_inversion K' H;
   try match goal with
   | H: fill ?K1 ?e1 = fill ?K2 ?e2 |- ?P => pose proof IHK _ H as [? ?]; subst; eauto
-  end;
-  try match goal with
   | H0: Val _ = fill ?K ?e, H1: head_step ?e _ _ _ _ _ |- ?P =>
     destruct_inversion K H0; inversion H1; subst;
     match goal with
     | H0: fill ?K ?e = Val _, H1: is_cf_terminal ?e |- ?P =>
       destruct_inversion K H0; inversion H1
     end
-  end;
-  try match goal with
   | H0: fill ?K ?e = Val _, H1: to_sval ?e = None |- ?P =>
     destruct_inversion K H0; inversion H1
   end;
@@ -1185,8 +1181,6 @@ Proof.
   try match goal with
   | H: Val _ = fill ?K ?e, H0: to_sval _ = None |- ?P =>
     destruct_inversion K H; inversion H0
-  end;
-  try match goal with
   | H: fill ?K ?e = _, H0: singleton_ectx _ |- ?P =>
     destruct_inversion K H;
     unfold singleton_ectx in H0; simpl H0; inversion H0;
@@ -1208,8 +1202,6 @@ Proof.
   try match goal with
   | H: Val _ = fill ?K _, H0: to_sval _ = None |- ?P =>
     destruct_inversion K H; inversion H0
-  end;
-  try match goal with
   | H: _ = fill ?K _, H0: to_sval _ = None |- ?P =>
     destruct_inversion K H; inversion H0;
     match goal with
@@ -1624,6 +1616,137 @@ Qed.
 Lemma my_reducible_fill K e σ :
 reducible e σ → reducible (fill K e) σ.
 Proof. unfold reducible in *. naive_solver eauto using fill_step. Qed.
+
+
+
+Definition outer (K : ectx) : ectx :=
+  match K with
+  | EmptyCtx => EmptyCtx
+  | AppLCtx _ v2 => AppLCtx EmptyCtx v2
+  | AppRCtx e1 _ => AppRCtx e1 EmptyCtx
+  | UnOpCtx op _ => UnOpCtx op EmptyCtx
+  | BinOpLCtx op _ v2 => BinOpLCtx op EmptyCtx v2
+  | BinOpRCtx op e1 _ => BinOpRCtx op e1 EmptyCtx
+  | IfCtx _ e1 e2 => IfCtx EmptyCtx e1 e2
+  | PairLCtx _ v2 => PairLCtx EmptyCtx v2
+  | PairRCtx e1 _ => PairRCtx e1 EmptyCtx
+  | FstCtx _ => FstCtx EmptyCtx
+  | SndCtx _ => SndCtx EmptyCtx
+  | InjLCtx _ => InjLCtx EmptyCtx
+  | InjRCtx _ => InjRCtx EmptyCtx
+  | CaseCtx _ e1 e2 => CaseCtx EmptyCtx e1 e2
+  | AllocNLCtx _ v2 => AllocNLCtx EmptyCtx v2
+  | AllocNRCtx e1 _ => AllocNRCtx e1 EmptyCtx
+  | LoadCtx _ => LoadCtx EmptyCtx
+  | StoreLCtx _ v2 => StoreLCtx EmptyCtx v2
+  | StoreRCtx e1 _ => StoreRCtx e1 EmptyCtx
+  | CmpXchgLCtx _ v1 v2 => CmpXchgLCtx EmptyCtx v1 v2
+  | CmpXchgMCtx e0 _ v2 => CmpXchgMCtx e0 EmptyCtx v2
+  | CmpXchgRCtx e0 e1 _ => CmpXchgRCtx e0 e1 EmptyCtx
+  | FaaLCtx _ v2 => FaaLCtx EmptyCtx v2
+  | FaaRCtx e1 _ => FaaRCtx e1 EmptyCtx
+  (* | ResolveLCtx _ v1 v2 => Resolve (fill _ e) (Val v1) (Val v2) *)
+  (* | ResolveMCtx ex _ v2 => Resolve ex (fill _ e) (Val v2) *)
+  (* | ResolveRCtx ex e1 _ => Resolve ex e1 (fill _ e) *)
+  (* MARK: new rules for new contexts *)
+  | LoopBCtx eb _ => LoopBCtx eb EmptyCtx
+  | BreakCtx _ => BreakCtx EmptyCtx
+  | CallCtx _ => CallCtx EmptyCtx
+  | ReturnCtx _ => ReturnCtx EmptyCtx
+  end.
+
+Definition inner (K : ectx) : ectx :=
+  match K with
+  | EmptyCtx => EmptyCtx
+  | AppLCtx K _ | AppRCtx _ K
+  | UnOpCtx _ K | BinOpLCtx _ K _
+  | BinOpRCtx _ _ K | IfCtx K _ _
+  | PairLCtx K _ | PairRCtx _ K
+  | FstCtx K | SndCtx K
+  | InjLCtx K | InjRCtx K
+  | CaseCtx K _ _ | AllocNLCtx K _
+  | AllocNRCtx _ K | LoadCtx K
+  | StoreLCtx K _ | StoreRCtx _ K
+  | CmpXchgLCtx K _ _ | CmpXchgMCtx _ K _
+  | CmpXchgRCtx _ _ K | FaaLCtx K _
+  | FaaRCtx _ K
+  | LoopBCtx _ K | BreakCtx K
+  | CallCtx K | ReturnCtx K
+    => K
+  end.
+
+(* TODO: move to lang.v *)
+Lemma cf_reducible: forall e K σ,
+  is_cf_terminal e ->
+  ¬ impenetrable_ectx e K ->
+  to_sval (fill K e) = None ->
+  reducible (fill K e) σ.
+Proof.
+  intros.
+  destruct H;
+  induction K; simpl in H1; inversion H1;
+  match goal with
+  | IHK: _ -> _ -> reducible (fill ?K'' _) _ |- reducible (fill ?K' ?e) ?σ =>
+    match K' with
+    (* | LoopBCtx _ _ => idtac *)
+    | CallCtx _ =>
+      match e with
+      | EReturn _ => idtac
+      | _ => exfalso; apply H0; constructor
+      end
+    | _ =>
+      match goal with | |- reducible (fill ?K' _) _ =>
+        destruct (to_sval (fill K'' e)) eqn:eq; 
+        [
+          destruct K''; simpl in eq; inversion eq;
+          match K' with
+          | BreakCtx _ => 
+          pose K''; (* FIXME: why pose K'' *)
+          try destruct_inversion K'' H3
+          | ReturnCtx _ =>
+          pose K''; (* FIXME: why pose K'' *)
+          try destruct_inversion K'' H3
+          | LoopBCtx ?eb ?K0 => 
+            try destruct_inversion K'' H2;
+            let e' :=
+              match e with
+              | EReturn _ => e | EBreak e => e
+              (* | EContinue => (LoopB eb eb) *)
+              end in
+              exists nil, e', σ, nil; simpl;
+              apply Ectx_step with EmptyCtx (fill (LoopBCtx eb K0) e) e'; auto; constructor
+          | _ =>
+            match goal with | |- reducible (fill ?K' _) _ =>
+              try destruct_inversion K'' H2;
+              exists nil, e, σ, nil; pose K';
+              apply Ectx_step with EmptyCtx (fill (outer K') e) e;
+              auto; constructor; 
+              unfold expr_depth.singleton_ectx; auto; constructor
+            end
+          end
+        |
+          (* exfalso; apply FF *)
+          replace (fill K' e) with (fill (outer K') (fill (inner K') e));
+          replace K' with (comp_ectx (outer K') (inner K')) in H0; auto;
+          apply comp_penetrable in H0 as [_ ?];
+          apply my_reducible_fill; auto
+        ]
+      end
+    end
+  end.
+
+  destruct (to_sval (fill K (EReturn $ Val v))) eqn:eq.
+  - destruct K; simpl in eq; inversion eq.
+    + exists nil, (Val v), σ, nil.
+      apply Ectx_step with EmptyCtx (fill (CallCtx EmptyCtx) (EReturn $ Val v)) (Val v); auto.
+      constructor.
+    + destruct_inversion K H2.
+    + destruct_inversion K H2.
+  - replace (fill (CallCtx K) (EReturn $ Val v)) with (fill (CallCtx EmptyCtx) (fill K (EReturn $ Val v))); auto.
+    replace (CallCtx K) with (comp_ectx (CallCtx EmptyCtx) K) in H0; auto.
+    apply comp_penetrable in H0 as [_ ?]; auto.
+    apply my_reducible_fill; auto.
+Qed.
 
 (* (** The following lemma is not provable using the axioms of [ectxi_language].
 The proof requires a case analysis over context items ([destruct i] on the
