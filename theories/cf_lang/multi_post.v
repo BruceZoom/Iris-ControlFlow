@@ -679,6 +679,39 @@ Proof.
   }
 Qed.
 
+
+Lemma tac_wp_bind_inv_sval s e K φn φb φc φr:
+  to_sval e = Some s ->
+  WP (fill K e) {{ φn }} {{ φb }} {{ φc }} {{ φr }} ⊢
+  WP e {{ λ v, (WP (fill K (Val v)) {{ φn }} {{ φb }} {{ φc }} {{ φr }}) }}
+       {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx (EBreak v) K)) (φb v) }}
+       {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx EContinue K)) (φc v) }}
+       {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx (EReturn v) K)) (φr v) }}.
+Proof.
+  iIntros (eq) "H".
+  destruct s; apply of_to_sval in eq; simpl in eq; subst.
+  {
+    repeat rewrite wp_unfold.
+    rewrite <- wp_unfold.
+    rewrite /wp_pre; simpl.
+    auto.
+  }
+  {
+    iRevert (K) "H".
+    iLöb as "IH".
+    iIntros (K) "H".
+    rewrite wp_unfold /wp_pre; simpl.
+    rewrite wp_unfold /wp_pre; simpl.
+    destruct (to_sval (fill K (break v))) eqn:eq.
+    {
+      destruct_inversion K eq; admit.
+    }
+    {
+      admit.
+    }
+Abort.
+
+
 Lemma tac_wp_bind e K φn φb φc φr:
   WP e {{ λ v, (WP (fill K (Val v)) {{ φn }} {{ φb }} {{ φc }} {{ φr }}) }}
        {{ λ v, uPred_and (uPred_pure (~ impenetrable_ectx (EBreak v) K)) (φb v) }}
@@ -1017,5 +1050,369 @@ Proof.
     iApply "IH"; auto.
   }
 Qed.
+
+(* Lemma wp_tac_if v e1 e2 φn φb φc φr:
+  (bi_pure (v = (LitV (LitBool true))) -∗ WP e1 {{ φn }} {{ φb }} {{ φc }} {{ φr }}) ∧
+  (bi_pure (v = (LitV (LitBool false))) -∗ WP e2 {{ φn }} {{ φb }} {{ φc }} {{ φr }}) -∗
+  WP (If (Val v) e1 e2) {{ φn }} {{ φb }} {{ φc }} {{ φr }}.
+Proof.
+  iIntros "H".
+   *)
+
+(* if seq
+no continue
+
+rev seq: P c1;;c2 Q -> exists R, P c1 R /\ R c2 Q
+
+
+[P -* wp c1;;c2 Q] ->
+exists R, [P -* wp c1 R] /\ [R -* wp c2 Q]
+
+
+wp c1;;c2 Q |- wp c1 {wp c2 Q}
+
+
+e no continue ->
+wp e {} {} { phi_c_1 } {} -||- wp e {} {} { phi_c_2 } {}
+
+
+Lemma wp_seq_sval s e1 e2 φn φb φc φr:
+  to_sval e1 = Some s ->
+  WP e1 {{ λ v, WP e2 {{ φn }} {{ φb }} {{ φc }} {{ φr }} }} {{ φb }} {{ φc }} {{ φr }} ⊢
+  WP (Seq e1 e2) {{ φn }} {{ φb }} {{ φc }} {{ φr }}.
+Proof.
+  iIntros (eq) "H".
+
+  (* replace (App (Rec BAnon BAnon e2) e1) with (fill (AppRCtx (Rec BAnon BAnon e2) EmptyCtx) e1); auto.
+  iApply tac_wp_bind; simpl.
+  destruct s; apply of_to_sval in eq; simpl in eq; subst.
+  {
+    rewrite wp_unfold /wp_pre; simpl.
+    repeat rewrite wp_unfold.
+    rewrite <- wp_unfold at 1.
+    rewrite /wp_pre; simpl.
+    
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+
+    iIntros "Hw".
+  } *)
+
+  destruct s; apply of_to_sval in eq; simpl in eq; subst.
+  {
+    rewrite wp_unfold /wp_pre; simpl.
+    repeat rewrite wp_unfold.
+    rewrite <- wp_unfold at 1.
+    rewrite /wp_pre; simpl.
+
+    unfold fupd.
+    unfold bi_fupd_fupd. simpl.
+    unfold uPred_fupd.
+    rewrite seal_eq.
+    unfold uPred_fupd_def.
+
+    iIntros (σ1 κ κs _) "Hs Hw".
+    iSpecialize ("H" with "Hw").
+
+    repeat iMod "H".
+    iDestruct "H" as "[Hw [Htop H]]".
+    iApply except_0_bupd.
+    iModIntro.
+    
+    iApply bupd_frame_l.
+    iFrame "Hw".
+    iApply bupd_frame_r.
+    iPoseProof ownE_empty as "Hown_phi".
+    iFrame "Hown_phi".
+
+    iSplitR.
+    {
+      iPureIntro.
+      exists nil, (App (Val $ RecV BAnon BAnon e2) (Val v)), σ1, nil.
+      apply Ectx_step with (AppLCtx EmptyCtx v) (Rec BAnon BAnon e2) (Val $ RecV BAnon BAnon e2); auto.
+      constructor.
+    }
+
+    iIntros (e0 σ2 efs H) "[Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Hphi".
+    iIntros "!# [Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Htop".
+
+    assert (σ1 = σ2 /\ κ = [] /\ efs = [] /\ e0 = (App (Val $ RecV BAnon BAnon e2) (Val v))) as [? [? [? ?]]]; subst.
+    {
+      inversion H.
+      destruct_inversion K H0.
+      - inversion H2; subst.
+        destruct_inversion K H0.
+        + inversion H1.
+        + unfold expr_depth.singleton_ectx in H4.
+          destruct_inversion K H4. simpl in *; subst.
+          inversion H1.
+        + unfold expr_depth.singleton_ectx in H4. simpl in H4.
+          destruct_inversion K H4. simpl in *; subst. inversion H1.
+      - destruct_inversion K H4.
+        inversion H2; subst.
+        + simpl. auto.
+        + destruct_inversion K H3.
+          unfold expr_depth.singleton_ectx in H5. inversion H5.
+      - destruct_inversion K H5.
+        inversion H2; subst.
+        destruct_inversion K H3.
+        inversion H4.
+    }
+
+    iFrame.
+    iSplitL; auto.
+
+    SearchAbout fupd.
+Abort.
+ *)
+
+Section strong_no_continue.
+  Fixpoint no_continue (e : expr) : Prop :=
+    match e with
+    | Var _ | Fork _ 
+      => True
+    | EContinue => False
+    | App e1 e2 | Pair e1 e2
+    | BinOp _ e1 e2 | AllocN e1 e2
+    | Store e1 e2 | FAA e1 e2
+    | LoopB e1 e2
+      => no_continue e1 /\ no_continue e2
+    | UnOp _ e 
+    | Rec _ _ e
+    | Fst e | Snd e
+    | InjL e | InjR e
+    | Load e | Call e 
+    | EBreak e | EReturn e
+      => no_continue e
+    | If e0 e1 e2
+    | Case e0 e1 e2
+    | CmpXchg e0 e1 e2
+      => no_continue e0 /\ no_continue e1 /\ no_continue e2
+    | Val v => no_continue_val v
+    end
+  with no_continue_val (v : val) : Prop :=
+    match v with
+    | RecV _ _ e => no_continue e
+    | PairV v1 v2 => no_continue_val v1 /\ no_continue_val v2
+    | InjLV v => no_continue_val v
+    | InjRV v => no_continue_val v
+    | _ => True 
+  end.
+
+  Lemma no_continue_un_op op v v':
+    no_continue (Val v) ->
+    un_op_eval op v = Some v' ->
+    no_continue_val v'.
+  Proof.
+    intros H. revert v'.
+    induction v; intros; simpl in *.
+    - destruct op, l; simpl in *;
+      inversion H0; auto.
+    - destruct op; inversion H0.
+    - destruct op; inversion H0.
+    - destruct op; inversion H0.
+    - destruct op; inversion H0.
+  Qed.
+
+  Lemma no_continue_bin_op op v1 v2 v':
+    no_continue (Val v1) ->
+    no_continue (Val v2) ->
+    bin_op_eval op v1 v2 = Some v' ->
+    no_continue_val v'.    
+  Proof.
+    intros.
+    unfold bin_op_eval in H1.
+    destruct (decide (op = EqOp)).
+    - destruct (decide (vals_compare_safe v1 v2)); inversion H1.
+      destruct (bool_decide (v1 = v2)); simpl; auto.
+    - destruct v1; inversion H1; clear H1.
+      destruct l; inversion H3; clear H3;
+      destruct v2; inversion H2; clear H2;
+      destruct l; inversion H3; clear H3.
+      + destruct op; inversion H2; auto.
+      + destruct op; inversion H2; auto.
+      + destruct op; inversion H2.
+        destruct l0; inversion H3.
+        auto.
+  Qed.
+
+  Lemma no_continue_preserve_head e1 σ1 κ e2 σ2 efs :
+    head_step e1 σ1 κ e2 σ2 efs ->
+    no_continue e1 -> no_continue e2.
+  Proof.
+    intros.
+    destruct e1; intros; simpl in H0; try inversion H0;
+    inversion H; subst; simpl; auto;
+    try match goal with
+    | H: head_step ?e1 _ _ ?e2 _ _, H1: fill ?K ?e2 = ?e1 |- ?P =>
+      destruct_inversion K H1
+    end;
+    try match goal with
+    | H: expr_depth.singleton_ectx _ |- ?P =>
+      unfold expr_depth.singleton_ectx in H;
+      inversion H;
+      try match goal with
+      | H: expr_depth.ectx_depth ?K = 0%nat |- ?P =>
+        destruct_inversion K H; auto
+      end
+    end;
+    (* try (destruct H2; simpl; auto); *)
+    (* try (destruct H0; auto); *)
+    try apply (no_continue_un_op _ _ _ H0 H8);
+    try (destruct H0; apply (no_continue_bin_op _ _ _ _ H0 H3 H11)).
+    - admit.
+    - destruct H2; auto.
+    - destruct H2. auto.
+    - destruct H0; auto.
+    - destruct H0; auto.
+    - destruct H0, H2; auto.
+    - destruct H0, H2; auto.
+    -
+     Locate heap.
+      Set Printing All.
+      Locate  admit. (* DEAD!!! Store a continue in state. *)
+    - split; auto.
+      admit. (* DEAD!!! Store a continue in state. *)
+  Abort.
+
+  Lemma no_continue_fill K e:
+    no_continue (fill K e) ->
+    no_continue e.
+  Proof.
+    induction K; intros; simpl; auto;
+    try (destruct H; eauto);
+    try (destruct H0; eauto).
+  Qed.
+
+  Lemma no_continue_fill_subst K e1 e2:
+    no_continue (fill K e1) ->
+    no_continue e2 ->
+    no_continue (fill K e2).
+  Proof.
+    induction K; intros; simpl; auto;
+    try (destruct H; eauto);
+    try (destruct H1; eauto).
+  Qed.
+
+  Lemma no_continue_preserve e1 σ1 κ e2 σ2 efs :
+    prim_step e1 σ1 κ e2 σ2 efs ->
+    no_continue e1 -> no_continue e2.
+  Proof.
+    intros.
+    inversion H; subst.
+    pose proof no_continue_fill _ _ H0.
+    apply no_continue_preserve_head in H3; auto.
+    apply (no_continue_fill_subst _ _ _ H0 H3).
+  Qed.
+
+  Lemma wp_no_continue_sval e s φn φb φr φ1 φ2:
+    to_sval e = Some s ->
+    no_continue e ->
+    WP e {{ φn }} {{ φb }} {{ φ1 }} {{ φr }} ⊢
+    WP e {{ φn }} {{ φb }} {{ φ2 }} {{ φr }}.
+  Proof.
+    iIntros (eq H) "H".
+    destruct s; apply of_to_sval in eq; simpl in eq; subst.
+    {
+      rewrite wp_unfold /wp_pre; simpl.
+      rewrite wp_unfold /wp_pre; simpl.
+      auto.
+    }
+    {
+      rewrite wp_unfold /wp_pre; simpl.
+      rewrite wp_unfold /wp_pre; simpl.
+      auto.
+    }
+    {
+      inversion H.
+    }
+    {
+      rewrite wp_unfold /wp_pre; simpl.
+      rewrite wp_unfold /wp_pre; simpl.
+      auto.
+    }
+  Qed.
+
+  Lemma wp_no_continue e φn φb φr φ1 φ2:
+    no_continue e ->
+    (* also require heap to be well formed *)
+    WP e {{ φn }} {{ φb }} {{ φ1 }} {{ φr }} ⊢
+    WP e {{ φn }} {{ φb }} {{ φ2 }} {{ φr }}.
+  Proof.
+    iIntros (H) "H".
+    destruct (to_sval e) eqn:eq.
+    {
+      iApply (wp_no_continue_sval e _ φn φb φr φ1 φ2 eq H with "H").
+    }
+    {
+      iRevert (e eq H) "H".
+      iLöb as "IH".
+      iIntros (e eq H) "H".
+      rewrite wp_unfold /wp_pre; simpl.
+      rewrite wp_unfold /wp_pre; simpl.
+      rewrite eq.
+
+      iIntros (σ1 κ κs ?) "Hs".
+      iSpecialize ("H" $! σ1 κ κs a with "Hs").
+
+      unfold fupd.
+      unfold bi_fupd_fupd. simpl.
+      unfold uPred_fupd.
+      rewrite seal_eq.
+      unfold uPred_fupd_def.
+
+      iIntros "Hw".
+      iSpecialize ("H" with "Hw").
+      
+      repeat iMod "H".
+      repeat iModIntro.
+
+      iDestruct "H" as "[Hw [Hphi [% H]]]".
+      iFrame "Hw".
+      iFrame "Hphi".
+
+      iSplitR; auto.
+      iIntros (e2 σ2 efs Hstep) "Hw".
+      iSpecialize ("H" $! e2 σ2 efs Hstep with "Hw").
+      repeat iMod "H".
+      repeat iModIntro.
+
+      iDestruct "H" as "[Hw [Hphi H]]".
+      iFrame "Hw".
+      iFrame "Hphi".
+      iNext.
+      
+      iIntros "Hw".
+      iSpecialize ("H" with "Hw").
+      repeat iMod "H".
+      repeat iModIntro.
+
+      iDestruct "H" as "[Hw [Hphi [Hs [H Hefs]]]]".
+      iFrame "Hw".
+      iFrame "Hphi".
+      iFrame "Hs".
+      iFrame "Hefs".
+
+      apply no_continue_preserve in Hstep; auto.
+      destruct (to_sval e2) eqn:eq'.
+      {
+        iApply (wp_no_continue_sval e2 _ φn φb φr φ1 φ2 eq' Hstep with "H").
+      }
+      {
+        iApply ("IH" $! e2 eq' Hstep with "H").
+      }
+    }
+  Qed.  
+End strong_no_continue.
+
+
+Print Assumptions wp_no_continue.
 
 End multi_post.
