@@ -994,6 +994,82 @@ Proof.
   rewrite right_id insert_union_singleton_l. done.
 Qed.
 
+Module NoContinue.
+Fixpoint no_continue (e : expr) : Prop :=
+  match e with
+  | Var _ | Fork _ 
+    => True
+  | EContinue => False
+  | App e1 e2 | Pair e1 e2
+  | BinOp _ e1 e2 | AllocN e1 e2
+  | Store e1 e2 | FAA e1 e2
+  | LoopB e1 e2
+    => no_continue e1 /\ no_continue e2
+  | UnOp _ e 
+  | Rec _ _ e
+  | Fst e | Snd e
+  | InjL e | InjR e
+  | Load e | Call e 
+  | EBreak e | EReturn e
+    => no_continue e
+  | If e0 e1 e2
+  | Case e0 e1 e2
+  | CmpXchg e0 e1 e2
+    => no_continue e0 /\ no_continue e1 /\ no_continue e2
+  | Val v => no_continue_val v
+  end
+with no_continue_val (v : val) : Prop :=
+  match v with
+  | RecV _ _ e => no_continue e
+  | PairV v1 v2 => no_continue_val v1 /\ no_continue_val v2
+  | InjLV v => no_continue_val v
+  | InjRV v => no_continue_val v
+  | _ => True 
+end.
+
+Lemma no_continue_un_op op v v':
+  no_continue (Val v) ->
+  un_op_eval op v = Some v' ->
+  no_continue_val v'.
+Proof.
+  intros H. revert v'.
+  induction v; intros; simpl in *.
+  - destruct op, l; simpl in *;
+    inversion H0; auto.
+  - destruct op; inversion H0.
+  - destruct op; inversion H0.
+  - destruct op; inversion H0.
+  - destruct op; inversion H0.
+Qed.
+
+Lemma no_continue_bin_op op v1 v2 v':
+  no_continue (Val v1) ->
+  no_continue (Val v2) ->
+  bin_op_eval op v1 v2 = Some v' ->
+  no_continue_val v'.    
+Proof.
+  intros.
+  unfold bin_op_eval in H1.
+  destruct (decide (op = EqOp)).
+  - destruct (decide (vals_compare_safe v1 v2)); inversion H1.
+    destruct (bool_decide (v1 = v2)); simpl; auto.
+  - destruct v1; inversion H1; clear H1.
+    destruct l; inversion H3; clear H3;
+    destruct v2; inversion H2; clear H2;
+    destruct l; inversion H3; clear H3.
+    + destruct op; inversion H2; auto.
+    + destruct op; inversion H2; auto.
+    + destruct op; inversion H2.
+      destruct l0; inversion H3.
+      auto.
+Qed.
+
+Definition no_continue_state (σ : state) : Prop :=
+  forall l v, heap σ !! l = Some v -> no_continue_val v.
+End NoContinue.
+
+Export NoContinue.
+
 Inductive head_step : expr → state → list observation → expr → state → list expr → Prop :=
   (* Original ones *)
   | RecS f x e σ :
@@ -1029,6 +1105,8 @@ Inductive head_step : expr → state → list observation → expr → state →
      wellformed e ->  (* MARK: The forked program must be wellformed *)
      head_step (Fork e) σ [] (Val $ LitV LitUnit) σ [e]
   | AllocNS n v σ l :
+     (* MARK: *)
+     no_continue_val v ->   
      0 < n →
      (∀ i, 0 ≤ i → i < n → σ.(heap) !! (l +ₗ i) = None) →
      head_step (AllocN (Val $ LitV $ LitInt n) (Val v)) σ
@@ -1039,12 +1117,16 @@ Inductive head_step : expr → state → list observation → expr → state →
      σ.(heap) !! l = Some v →
      head_step (Load (Val $ LitV $ LitLoc l)) σ [] (Val v) σ []
   | StoreS l v σ :
+     (* MARK: *)
+     no_continue_val v ->
      is_Some (σ.(heap) !! l) →
      head_step (Store (Val $ LitV $ LitLoc l) (Val v)) σ
                []
                (Val $ LitV LitUnit) (state_upd_heap <[l:=v]> σ)
                []
   | CmpXchgS l v1 v2 vl σ b :
+     (* MARK: *)
+     no_continue_val v2 ->
      σ.(heap) !! l = Some vl →
      (* Crucially, this compares the same way as [EqOp]! *)
      vals_compare_safe vl v1 →
@@ -1087,6 +1169,102 @@ Inductive head_step : expr → state → list observation → expr → state →
      singleton_ectx K ->
      ~ impenetrable_ectx e K ->
      head_step (fill K e) σ [] e σ [].
+
+Module NoContinueHeadPreserve.
+Lemma no_continue_state_preserve_head e1 σ1 κ e2 σ2 efs:
+  no_continue_state σ1 ->
+  head_step e1 σ1 κ e2 σ2 efs ->
+  no_continue_state σ2.
+Proof.
+  intros.
+  induction H0; auto.
+  - unfold no_continue_state in *.
+    intros. simpl in H3.
+    apply lookup_union_Some_raw in H3.
+    destruct H3 as [? | [? ?]].
+    + apply heap_array_lookup in H3 as [j [? [? ?]]].
+      apply lookup_replicate_1 in H5 as [? ?].
+      subst; auto.
+    + apply H in H4. auto.
+  - unfold no_continue_state in *.
+    intros. simpl in H2.
+    destruct (loc_eq_decision l l0); subst.
+    + rewrite lookup_insert in H2.
+      inversion H2; subst. auto.
+    + rewrite (lookup_insert_ne _ _ _ _ n) in H2.
+      apply H in H2; auto.
+  - clear H3; destruct b; auto.
+    unfold no_continue_state in *.
+    intros. simpl in H2.
+    destruct (loc_eq_decision l l0); subst.
+    + rewrite lookup_insert in H3.
+      inversion H3; subst. auto.
+    + rewrite (lookup_insert_ne _ _ _ _ n) in H3.
+      apply H in H3; auto.
+  - unfold no_continue_state in *.
+    intros. simpl in H1.
+    destruct (loc_eq_decision l l0); subst.
+    + rewrite lookup_insert in H1.
+      inversion H1; subst.
+      simpl; auto.
+    + rewrite (lookup_insert_ne _ _ _ _ n) in H1.
+      apply H in H1; auto.
+Qed.
+
+Lemma no_continue_subst x v e:
+  no_continue_val v ->
+  no_continue e ->
+  no_continue (subst' x v e).
+Proof.
+  intros.
+  unfold subst'.
+  destruct x; auto.
+  induction e; simpl in *; auto;
+  try (split; try destruct H0 as [? [? ?]]; try destruct H0; auto).
+  - destruct (decide (s = x)); auto.
+  - destruct (decide ((BNamed s) ≠ f ∧ (BNamed s) ≠ x)); auto.
+Qed.
+
+Lemma no_continue_preserve_head e1 σ1 κ e2 σ2 efs :
+  no_continue_state σ1 ->  
+  head_step e1 σ1 κ e2 σ2 efs ->
+  no_continue e1 -> no_continue e2.
+Proof.
+  intro HStateNoContinue.
+  intros.
+  destruct e1; intros; simpl in H0; try inversion H0;
+  inversion H; subst; simpl; auto;
+  try match goal with
+  | H: head_step ?e1 _ _ ?e2 _ _, H1: fill ?K ?e2 = ?e1 |- ?P =>
+    destruct_inversion K H1
+  end;
+  try match goal with
+  | H: expr_depth.singleton_ectx _ |- ?P =>
+    unfold expr_depth.singleton_ectx in H;
+    inversion H;
+    try match goal with
+    | H: expr_depth.ectx_depth ?K = 0%nat |- ?P =>
+      destruct_inversion K H; auto
+    end
+  end;
+  (* try (destruct H2; simpl; auto); *)
+  (* try (destruct H0; auto); *)
+  try apply (no_continue_un_op _ _ _ H0 H8);
+  try (destruct H0; apply (no_continue_bin_op _ _ _ _ H0 H3 H11)).
+  - apply no_continue_subst; auto.
+    apply no_continue_subst; auto.
+  - destruct H2; auto.
+  - destruct H2. auto.
+  - destruct H0; auto.
+  - destruct H0; auto.
+  - destruct H0, H2; auto.
+  - destruct H0, H2; auto.
+  - apply HStateNoContinue in H2; auto.
+  - apply HStateNoContinue in H7; auto.
+  - simpl in H2; tauto.
+  - simpl in H2; tauto.
+Qed.
+End NoContinueHeadPreserve.
 
 Lemma sval_head_stuck e1 σ1 κ e2 σ2 efs : head_step e1 σ1 κ e2 σ2 efs → to_sval e1 = None.
 Proof.
@@ -1228,13 +1406,15 @@ Qed.
 Proof. revert Ki1. induction Ki2, Ki1; naive_solver eauto with f_equal. Qed. *)
 
 Lemma alloc_fresh v n σ :
+  (* MARK: *)
+  no_continue_val v ->
   let l := fresh_locs (dom (gset loc) σ.(heap)) in
   0 < n →
   head_step (AllocN ((Val $ LitV $ LitInt $ n)) (Val v)) σ []
             (Val $ LitV $ LitLoc l) (state_init_heap l n v σ) [].
 Proof.
   intros.
-  apply AllocNS; first done.
+  apply AllocNS; auto.
   intros. apply (not_elem_of_dom (D := gset loc)).
   by apply fresh_locs_fresh.
 Qed.

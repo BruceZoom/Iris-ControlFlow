@@ -1174,7 +1174,7 @@ Abort.
  *)
 
 Section strong_no_continue.
-  Fixpoint no_continue (e : expr) : Prop :=
+  (* Fixpoint no_continue (e : expr) : Prop :=
     match e with
     | Var _ | Fork _ 
       => True
@@ -1280,7 +1280,9 @@ Section strong_no_continue.
       Locate  admit. (* DEAD!!! Store a continue in state. *)
     - split; auto.
       admit. (* DEAD!!! Store a continue in state. *)
-  Abort.
+  Abort. *)
+
+  Import NoContinueHeadPreserve.
 
   Lemma no_continue_fill K e:
     no_continue (fill K e) ->
@@ -1302,9 +1304,11 @@ Section strong_no_continue.
   Qed.
 
   Lemma no_continue_preserve e1 σ1 κ e2 σ2 efs :
+    no_continue_state σ1 ->
     prim_step e1 σ1 κ e2 σ2 efs ->
     no_continue e1 -> no_continue e2.
   Proof.
+    intro HStateNoContinue.
     intros.
     inversion H; subst.
     pose proof no_continue_fill _ _ H0.
@@ -1340,13 +1344,20 @@ Section strong_no_continue.
     }
   Qed.
 
+  (* Definition state_has_no_continue v : iProp Σ := 
+    (∀ l: loc, l ↦ v). *)
+
+  
+
   Lemma wp_no_continue e φn φb φr φ1 φ2:
     no_continue e ->
+    (* (∀ l v, l ↦ v -∗ ⌜no_continue_val v⌝) ∗ *)
+    □ (∀ σ, gen_heap_ctx (heap σ) -∗ (gen_heap_ctx (heap σ) ∗ ⌜no_continue_state σ⌝ ))%I ∗
     (* also require heap to be well formed *)
     WP e {{ φn }} {{ φb }} {{ φ1 }} {{ φr }} ⊢
     WP e {{ φn }} {{ φb }} {{ φ2 }} {{ φr }}.
   Proof.
-    iIntros (H) "H".
+    iIntros (H) "[#HNCS H]".
     destruct (to_sval e) eqn:eq.
     {
       iApply (wp_no_continue_sval e _ φn φb φr φ1 φ2 eq H with "H").
@@ -1359,7 +1370,10 @@ Section strong_no_continue.
       rewrite wp_unfold /wp_pre; simpl.
       rewrite eq.
 
-      iIntros (σ1 κ κs ?) "Hs".
+      iIntros (σ1 κ κs ?) "[Hheap Hproph]".
+      iSpecialize ("HNCS" $! σ1 with "Hheap").
+      iDestruct "HNCS" as "[Hheap %]".
+      iCombine "Hheap Hproph" as "Hs".
       iSpecialize ("H" $! σ1 κ κs a with "Hs").
 
       unfold fupd.
@@ -1412,7 +1426,5 @@ Section strong_no_continue.
   Qed.  
 End strong_no_continue.
 
-
-Print Assumptions wp_no_continue.
 
 End multi_post.
