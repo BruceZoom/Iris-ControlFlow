@@ -1,8 +1,9 @@
 From stdpp Require Export binders strings.
 From stdpp Require Import gmap.
 From iris.algebra Require Export ofe.
-From iris.program_logic Require Export language ectx_language ectxi_language.
+From iris.program_logic Require Export language.
 From iris.heap_lang Require Export locations.
+From Coq.omega Require Omega.
 Set Default Proof Using "Type".
 
 
@@ -22,7 +23,8 @@ behavior. So we erase to the poison value instead, making sure that no legal
 comparisons could be affected. *)
 Inductive base_lit : Set :=
   | LitInt (n : Z) | LitBool (b : bool) | LitUnit | LitPoison
-  | LitLoc (l : loc) | LitProphecy (p: proph_id).
+  | LitLoc (l : loc).
+   (* | LitProphecy (p: proph_id). *)
 Inductive un_op : Set :=
   | NegOp | MinusUnOp.
 Inductive bin_op : Set :=
@@ -60,8 +62,8 @@ Inductive expr :=
   | CmpXchg (e0 : expr) (e1 : expr) (e2 : expr) (* Compare-exchange *)
   | FAA (e1 : expr) (e2 : expr) (* Fetch-and-add *)
   (* Prophecy *)
-  | NewProph
-  | Resolve (e0 : expr) (e1 : expr) (e2 : expr) (* wrapped expr, proph, val *)
+  (* | NewProph *)
+  (* | Resolve (e0 : expr) (e1 : expr) (e2 : expr) (* wrapped expr, proph, val *) *)
   (* MARK: Control Flow: Loop *)
   | LoopB (eb : expr) (e : expr)    (* loop body: original loop body, expression remains in the current iteration *)
   | EBreak (e : expr)
@@ -157,7 +159,8 @@ Definition lit_is_unboxed (l: base_lit) : Prop :=
   match l with
   (** Disallow comparing (erased) prophecies with (erased) prophecies, by
   considering them boxed. *)
-  | LitProphecy _ | LitPoison => False
+  (* | LitProphecy _  *)
+  | LitPoison => False
   | _ => True
   end.
 Definition val_is_unboxed (v : val) : Prop :=
@@ -188,6 +191,15 @@ Record state : Type := {
 }.
 
 (** Equality and other typeclass stuff *)
+Lemma to_of_val v : to_val (of_val v) = Some v.
+Proof. by destruct v. Qed.
+
+Lemma of_to_val e v : to_val e = Some v -> of_val v = e.
+Proof.
+  destruct e=>//=;
+  try destruct e=>//=; intros [= <-]; auto.
+Qed.
+
 Lemma to_of_sval v : to_sval (of_sval v) = Some v.
 Proof. by destruct v. Qed.
 
@@ -244,9 +256,9 @@ Proof.
         cast_if_and3 (decide (e0 = e0')) (decide (e1 = e1')) (decide (e2 = e2'))
      | FAA e1 e2, FAA e1' e2' =>
         cast_if_and (decide (e1 = e1')) (decide (e2 = e2'))
-     | NewProph, NewProph => left _
-     | Resolve e0 e1 e2, Resolve e0' e1' e2' =>
-        cast_if_and3 (decide (e0 = e0')) (decide (e1 = e1')) (decide (e2 = e2'))
+     (* | NewProph, NewProph => left _ *)
+     (* | Resolve e0 e1 e2, Resolve e0' e1' e2' => *)
+        (* cast_if_and3 (decide (e0 = e0')) (decide (e1 = e1')) (decide (e2 = e2')) *)
      (* MARK: new rules for new expressions *)
      | LoopB eb e, LoopB eb' e' =>
         cast_if_and (decide (eb = eb')) (decide (e = e'))
@@ -277,19 +289,19 @@ Proof. solve_decision. Defined.
 Instance base_lit_countable : Countable base_lit.
 Proof.
  refine (inj_countable' (λ l, match l with
-  | LitInt n => (inl (inl n), None)
-  | LitBool b => (inl (inr b), None)
-  | LitUnit => (inr (inl false), None)
-  | LitPoison => (inr (inl true), None)
-  | LitLoc l => (inr (inr l), None)
-  | LitProphecy p => (inr (inl false), Some p)
+  | LitInt n => (inl (inl n))
+  | LitBool b => (inl (inr b))
+  | LitUnit => (inr (inl false))
+  | LitPoison => (inr (inl true))
+  | LitLoc l => (inr (inr l))
+  (* | LitProphecy p => (inr (inl false), Some p) *)
   end) (λ l, match l with
-  | (inl (inl n), None) => LitInt n
-  | (inl (inr b), None) => LitBool b
-  | (inr (inl false), None) => LitUnit
-  | (inr (inl true), None) => LitPoison
-  | (inr (inr l), None) => LitLoc l
-  | (_, Some p) => LitProphecy p
+  | (inl (inl n)) => LitInt n
+  | (inl (inr b)) => LitBool b
+  | (inr (inl false)) => LitUnit
+  | (inr (inl true)) => LitPoison
+  | (inr (inr l)) => LitLoc l
+  (* | (_, Some p) => LitProphecy p *)
   end) _); by intros [].
 Qed.
 Instance un_op_finite : Countable un_op.
@@ -333,8 +345,8 @@ Proof.
      | Store e1 e2 => GenNode 15 [go e1; go e2]
      | CmpXchg e0 e1 e2 => GenNode 16 [go e0; go e1; go e2]
      | FAA e1 e2 => GenNode 17 [go e1; go e2]
-     | NewProph => GenNode 18 []
-     | Resolve e0 e1 e2 => GenNode 19 [go e0; go e1; go e2]
+     (* | NewProph => GenNode 18 [] *)
+     (* | Resolve e0 e1 e2 => GenNode 19 [go e0; go e1; go e2] *)
      (* MARK: new rules for new expressions *)
      | LoopB eb e => GenNode 20 [go eb; go e]
      | EBreak e => GenNode 21 [go e]
@@ -374,8 +386,8 @@ Proof.
      | GenNode 15 [e1; e2] => Store (go e1) (go e2)
      | GenNode 16 [e0; e1; e2] => CmpXchg (go e0) (go e1) (go e2)
      | GenNode 17 [e1; e2] => FAA (go e1) (go e2)
-     | GenNode 18 [] => NewProph
-     | GenNode 19 [e0; e1; e2] => Resolve (go e0) (go e1) (go e2)
+     (* | GenNode 18 [] => NewProph *)
+     (* | GenNode 19 [e0; e1; e2] => Resolve (go e0) (go e1) (go e2) *)
      (* MARK: new rules for new expressions *)
      | GenNode 20 [eb; e] => LoopB (go eb) (go e)
      | GenNode 21 [e] => EBreak (go e)
@@ -396,7 +408,7 @@ Proof.
    for go).
  refine (inj_countable' enc dec _).
  refine (fix go (e : expr) {struct e} := _ with gov (v : val) {struct v} := _ for go).
- - destruct e as [v | | | | | | | | | | | | | | | | | | | | | | | | | ]; simpl; f_equal;
+ - destruct e as [v | | | | | | | | | | | | | | | | | | | | | | | ]; simpl; f_equal;
      [exact (gov v)|done..].
  - destruct v; by f_equal.
 Qed.
@@ -446,9 +458,9 @@ Inductive ctx' :=
   | FaaLCtx' (K : ctx') (e2 : expr)
   | FaaRCtx' (e1 : expr) (K : ctx')
   (* TODO: possible problems with the resolve context *)
-  | ResolveLCtx' (K : ctx') (e1 : expr) (e2 : expr)
-  | ResolveMCtx' (e0 : expr) (K : ctx') (e2 : expr)
-  | ResolveRCtx' (e0 : expr) (e1 : expr) (K : ctx')
+  (* | ResolveLCtx' (K : ctx') (e1 : expr) (e2 : expr) *)
+  (* | ResolveMCtx' (e0 : expr) (K : ctx') (e2 : expr) *)
+  (* | ResolveRCtx' (e0 : expr) (e1 : expr) (K : ctx') *)
   (* MARK: new contexts *)
   | LoopBCtx' (eb : expr) (K : ctx')
   | BreakCtx' (K : ctx')
@@ -482,9 +494,9 @@ Fixpoint comp_ctx' (K1 K2 : ctx') : ctx' :=
   | FaaLCtx' K e2 => FaaLCtx' (comp_ctx' K K2) e2
   | FaaRCtx' e1 K => FaaRCtx' e1 (comp_ctx' K K2)
   (* TODO: possible problems with the resolve context *)
-  | ResolveLCtx' K e1 e2 => ResolveLCtx' (comp_ctx' K K2) e1 e2
-  | ResolveMCtx' e0 K e2 => ResolveMCtx' e0 (comp_ctx' K K2) e2
-  | ResolveRCtx' e0 e1 K => ResolveRCtx' e0 e1 (comp_ctx' K K2)
+  (* | ResolveLCtx' K e1 e2 => ResolveLCtx' (comp_ctx' K K2) e1 e2 *)
+  (* | ResolveMCtx' e0 K e2 => ResolveMCtx' e0 (comp_ctx' K K2) e2 *)
+  (* | ResolveRCtx' e0 e1 K => ResolveRCtx' e0 e1 (comp_ctx' K K2) *)
   (* MARK: new contexts *)
   | LoopBCtx' eb K => LoopBCtx' eb (comp_ctx' K K2)
   | BreakCtx' K => BreakCtx' (comp_ctx' K K2)
@@ -549,9 +561,9 @@ Fixpoint fill' (K : ctx') (e : expr) : expr :=
   | CmpXchgRCtx' e0 e1 K => CmpXchg e0 e1 (fill' K e)
   | FaaLCtx' K e2 => FAA (fill' K e) e2
   | FaaRCtx' e1 K => FAA e1 (fill' K e)
-  | ResolveLCtx' K e1 e2 => Resolve (fill' K e) e1 e2
-  | ResolveMCtx' ex K e2 => Resolve ex (fill' K e) e2
-  | ResolveRCtx' ex e1 K => Resolve ex e1 (fill' K e)
+  (* | ResolveLCtx' K e1 e2 => Resolve (fill' K e) e1 e2 *)
+  (* | ResolveMCtx' ex K e2 => Resolve ex (fill' K e) e2 *)
+  (* | ResolveRCtx' ex e1 K => Resolve ex e1 (fill' K e) *)
   (* MARK: new rules for new contexts *)
   | LoopBCtx' eb K => LoopB eb (fill' K e)
   | BreakCtx' K => EBreak (fill' K e)
@@ -591,9 +603,9 @@ Inductive ectx :=
   | FaaLCtx (K : ectx) (v2 : val)
   | FaaRCtx (e1 : expr) (K : ectx)
   (* TODO: possible problems with the resolve context *)
-  | ResolveLCtx (K : ectx) (v1 : val) (v2 : val)
-  | ResolveMCtx (e0 : expr) (K : ectx) (v2 : val)
-  | ResolveRCtx (e0 : expr) (e1 : expr) (K : ectx)
+  (* | ResolveLCtx (K : ectx) (v1 : val) (v2 : val) *)
+  (* | ResolveMCtx (e0 : expr) (K : ectx) (v2 : val) *)
+  (* | ResolveRCtx (e0 : expr) (e1 : expr) (K : ectx) *)
   (* MARK: new contexts *)
   | LoopBCtx (eb : expr) (K : ectx)
   | BreakCtx (K : ectx)
@@ -627,9 +639,9 @@ Fixpoint comp_ectx (K1 K2 : ectx) : ectx :=
   | FaaLCtx K v2 => FaaLCtx (comp_ectx K K2) v2
   | FaaRCtx e1 K => FaaRCtx e1 (comp_ectx K K2)
   (* TODO: possible problems with the resolve context *)
-  | ResolveLCtx K v1 v2 => ResolveLCtx (comp_ectx K K2) v1 v2
-  | ResolveMCtx e0 K v2 => ResolveMCtx e0 (comp_ectx K K2) v2
-  | ResolveRCtx e0 e1 K => ResolveRCtx e0 e1 (comp_ectx K K2)
+  (* | ResolveLCtx K v1 v2 => ResolveLCtx (comp_ectx K K2) v1 v2 *)
+  (* | ResolveMCtx e0 K v2 => ResolveMCtx e0 (comp_ectx K K2) v2 *)
+  (* | ResolveRCtx e0 e1 K => ResolveRCtx e0 e1 (comp_ectx K K2) *)
   (* MARK: new contexts *)
   | LoopBCtx eb K => LoopBCtx eb (comp_ectx K K2)
   | BreakCtx K => BreakCtx (comp_ectx K K2)
@@ -687,15 +699,146 @@ Fixpoint fill (K : ectx) (e : expr) : expr :=
   | CmpXchgRCtx e0 e1 K => CmpXchg e0 e1 (fill K e)
   | FaaLCtx K v2 => FAA (fill K e) (Val v2)
   | FaaRCtx e1 K => FAA e1 (fill K e)
-  | ResolveLCtx K v1 v2 => Resolve (fill K e) (Val v1) (Val v2)
-  | ResolveMCtx ex K v2 => Resolve ex (fill K e) (Val v2)
-  | ResolveRCtx ex e1 K => Resolve ex e1 (fill K e)
+  (* | ResolveLCtx K v1 v2 => Resolve (fill K e) (Val v1) (Val v2) *)
+  (* | ResolveMCtx ex K v2 => Resolve ex (fill K e) (Val v2) *)
+  (* | ResolveRCtx ex e1 K => Resolve ex e1 (fill K e) *)
   (* MARK: new rules for new contexts *)
   | LoopBCtx eb K => LoopB eb (fill K e)
   | BreakCtx K => EBreak (fill K e)
   | CallCtx K => Call (fill K e)
   | ReturnCtx K => EReturn (fill K e)
   end.
+
+(** Basic properties about the language *)
+Instance fill_inj K : Inj (=) (=) (fill K).
+Proof. induction K; intros ???; simplify_eq/=; auto with f_equal. Qed.
+
+Lemma fill_sval K e :
+  is_Some (to_sval (fill K e)) → is_Some (to_sval e).
+Proof.
+  intros [v ?]. revert H. revert v.
+  induction K; inversion 1.
+  - rewrite H1. eauto.
+  - destruct (fill K e); inversion H1.
+    apply IHK with (SVal v0). eauto.
+  - destruct (fill K e); inversion H1.
+    apply IHK with (SVal v0). eauto.
+Qed.
+
+Lemma fill_val K e :
+  is_Some (to_val (fill K e)) → is_Some (to_val e).
+Proof.
+  intros [v ?]. revert H. revert v.
+  induction K; inversion 1.
+  rewrite H1. eauto.
+Qed.
+
+Lemma fill_not_sval K e:
+  to_sval e = None → to_sval (fill K e) = None.
+Proof.
+  intros.
+  assert (~(is_Some (to_sval e))). {
+    unfold not. rewrite H. apply is_Some_None.
+  }
+  assert (~(is_Some (to_sval (fill K e)))). {
+    unfold not in *. intros. apply fill_sval in H1. auto.
+  }
+  unfold not in H1.
+  destruct (to_sval (fill K e)); auto.
+  exfalso. apply H1. eauto.
+Qed.
+
+Lemma fill_not_val K e:
+  to_val e = None → to_val (fill K e) = None.
+Proof.
+  intros.
+  assert (~(is_Some (to_val e))). {
+    unfold not. rewrite H. apply is_Some_None.
+  }
+  assert (~(is_Some (to_val (fill K e)))). {
+    unfold not in *. intros. apply fill_val in H1. auto.
+  }
+  unfold not in H1.
+  destruct (to_val (fill K e)); auto.
+  exfalso. apply H1. eauto.
+Qed.
+
+Ltac destruct_inversion K H :=
+destruct K; simpl in H; inversion H; subst.
+
+
+Module expr_depth.
+Import Omega.
+Open Scope nat_scope.
+
+Fixpoint expr_depth (e : expr) : nat :=
+  match e with
+  | Val _ | Var _ | Rec _ _ _
+  (* | NewProph  *)
+  | EContinue => 1
+  | App e1 e2 | Pair e1 e2
+  | BinOp _ e1 e2 | AllocN e1 e2
+  | Store e1 e2 | FAA e1 e2
+    => match (to_val e2) with
+       | Some _ => 1 + expr_depth e1
+       | None  => 1 + expr_depth e2
+       end
+  | UnOp _ e | If e _ _
+  | Fst e | Snd e
+  | InjL e | InjR e
+  | Case e _ _ | Fork e
+  | Load e | LoopB _ e
+  | EBreak e | Call e
+  | EReturn e
+    => 1 + expr_depth e
+  | CmpXchg e0 e1 e2
+  (* | Resolve e0 e1 e2 *)
+    => match (to_val e1), (to_val e2) with
+       | _, None => 1 + expr_depth e2
+       | None, Some _ => 1 + expr_depth e1
+       | Some _, Some _ => 1 + expr_depth e0
+       end
+  end.
+
+Fixpoint ectx_depth (K : ectx) : nat :=
+  match K with
+  | EmptyCtx => 0 
+  | AppLCtx K _ | AppRCtx _ K
+  | UnOpCtx _ K | BinOpLCtx _ K _
+  | BinOpRCtx _ _ K | IfCtx K _ _
+  | PairLCtx K _ | PairRCtx _ K
+  | FstCtx K | SndCtx K
+  | InjLCtx K | InjRCtx K
+  | CaseCtx K _ _ | AllocNLCtx K _
+  | AllocNRCtx _ K | LoadCtx K
+  | StoreLCtx K _ | StoreRCtx _ K
+  | CmpXchgLCtx K _ _ | CmpXchgMCtx _ K _
+  | CmpXchgRCtx _ _ K | FaaLCtx K _
+  | FaaRCtx _ K
+  (* | ResolveLCtx K _ _ | ResolveMCtx _ K _ | ResolveRCtx _ _ K *)
+  | LoopBCtx _ K | BreakCtx K
+  | CallCtx K | ReturnCtx K
+    => 1 + ectx_depth K
+  end.
+
+Lemma fill_depth K e :
+  to_val e = None ->
+  expr_depth (fill K e) = (ectx_depth K) + (expr_depth e).
+Proof.
+  intros.
+  (* pose proof fill_not_val K _ H. *)
+  induction K; simpl in *; eauto;
+  try (pose proof fill_not_val K _ H; rewrite H0);
+  try (rewrite IHK; try destruct (to_val e1); eauto).
+Qed.
+
+Definition singleton_ectx K : Prop := ectx_depth K = 1.
+Definition singleton_expr e : Prop := expr_depth e = 1.
+
+Close Scope nat_scope.
+End expr_depth.
+Import expr_depth.
+
 
 (** Substitution *)
 Fixpoint subst (x : string) (v : val) (e : expr)  : expr :=
@@ -720,8 +863,8 @@ Fixpoint subst (x : string) (v : val) (e : expr)  : expr :=
   | Store e1 e2 => Store (subst x v e1) (subst x v e2)
   | CmpXchg e0 e1 e2 => CmpXchg (subst x v e0) (subst x v e1) (subst x v e2)
   | FAA e1 e2 => FAA (subst x v e1) (subst x v e2)
-  | NewProph => NewProph
-  | Resolve ex e1 e2 => Resolve (subst x v ex) (subst x v e1) (subst x v e2)
+  (* | NewProph => NewProph *)
+  (* | Resolve ex e1 e2 => Resolve (subst x v ex) (subst x v e1) (subst x v e2) *)
   (* MARK: new rules for new expressions *)
   | LoopB eb e => LoopB (subst x v eb) (subst x v e)  (* TODO: not sure wether to subst eb *)
   | EBreak e => EBreak (subst x v e)
@@ -851,6 +994,82 @@ Proof.
   rewrite right_id insert_union_singleton_l. done.
 Qed.
 
+Module NoContinue.
+Fixpoint no_continue (e : expr) : Prop :=
+  match e with
+  | Var _ | Fork _ 
+    => True
+  | EContinue => False
+  | App e1 e2 | Pair e1 e2
+  | BinOp _ e1 e2 | AllocN e1 e2
+  | Store e1 e2 | FAA e1 e2
+  | LoopB e1 e2
+    => no_continue e1 /\ no_continue e2
+  | UnOp _ e 
+  | Rec _ _ e
+  | Fst e | Snd e
+  | InjL e | InjR e
+  | Load e | Call e 
+  | EBreak e | EReturn e
+    => no_continue e
+  | If e0 e1 e2
+  | Case e0 e1 e2
+  | CmpXchg e0 e1 e2
+    => no_continue e0 /\ no_continue e1 /\ no_continue e2
+  | Val v => no_continue_val v
+  end
+with no_continue_val (v : val) : Prop :=
+  match v with
+  | RecV _ _ e => no_continue e
+  | PairV v1 v2 => no_continue_val v1 /\ no_continue_val v2
+  | InjLV v => no_continue_val v
+  | InjRV v => no_continue_val v
+  | _ => True 
+end.
+
+Lemma no_continue_un_op op v v':
+  no_continue (Val v) ->
+  un_op_eval op v = Some v' ->
+  no_continue_val v'.
+Proof.
+  intros H. revert v'.
+  induction v; intros; simpl in *.
+  - destruct op, l; simpl in *;
+    inversion H0; auto.
+  - destruct op; inversion H0.
+  - destruct op; inversion H0.
+  - destruct op; inversion H0.
+  - destruct op; inversion H0.
+Qed.
+
+Lemma no_continue_bin_op op v1 v2 v':
+  no_continue (Val v1) ->
+  no_continue (Val v2) ->
+  bin_op_eval op v1 v2 = Some v' ->
+  no_continue_val v'.    
+Proof.
+  intros.
+  unfold bin_op_eval in H1.
+  destruct (decide (op = EqOp)).
+  - destruct (decide (vals_compare_safe v1 v2)); inversion H1.
+    destruct (bool_decide (v1 = v2)); simpl; auto.
+  - destruct v1; inversion H1; clear H1.
+    destruct l; inversion H3; clear H3;
+    destruct v2; inversion H2; clear H2;
+    destruct l; inversion H3; clear H3.
+    + destruct op; inversion H2; auto.
+    + destruct op; inversion H2; auto.
+    + destruct op; inversion H2.
+      destruct l0; inversion H3.
+      auto.
+Qed.
+
+Definition no_continue_state (σ : state) : Prop :=
+  forall l v, heap σ !! l = Some v -> no_continue_val v.
+End NoContinue.
+
+Export NoContinue.
+
 Inductive head_step : expr → state → list observation → expr → state → list expr → Prop :=
   (* Original ones *)
   | RecS f x e σ :
@@ -886,6 +1105,8 @@ Inductive head_step : expr → state → list observation → expr → state →
      wellformed e ->  (* MARK: The forked program must be wellformed *)
      head_step (Fork e) σ [] (Val $ LitV LitUnit) σ [e]
   | AllocNS n v σ l :
+     (* MARK: *)
+     no_continue_val v ->   
      0 < n →
      (∀ i, 0 ≤ i → i < n → σ.(heap) !! (l +ₗ i) = None) →
      head_step (AllocN (Val $ LitV $ LitInt n) (Val v)) σ
@@ -896,12 +1117,16 @@ Inductive head_step : expr → state → list observation → expr → state →
      σ.(heap) !! l = Some v →
      head_step (Load (Val $ LitV $ LitLoc l)) σ [] (Val v) σ []
   | StoreS l v σ :
+     (* MARK: *)
+     no_continue_val v ->
      is_Some (σ.(heap) !! l) →
      head_step (Store (Val $ LitV $ LitLoc l) (Val v)) σ
                []
                (Val $ LitV LitUnit) (state_upd_heap <[l:=v]> σ)
                []
   | CmpXchgS l v1 v2 vl σ b :
+     (* MARK: *)
+     no_continue_val v2 ->
      σ.(heap) !! l = Some vl →
      (* Crucially, this compares the same way as [EqOp]! *)
      vals_compare_safe vl v1 →
@@ -916,7 +1141,7 @@ Inductive head_step : expr → state → list observation → expr → state →
                []
                (Val $ LitV $ LitInt i1) (state_upd_heap <[l:=LitV (LitInt (i1 + i2))]>σ)
                []
-  | NewProphS σ p :
+  (* | NewProphS σ p :
      p ∉ σ.(used_proph_id) →
      head_step NewProph σ
                []
@@ -925,7 +1150,7 @@ Inductive head_step : expr → state → list observation → expr → state →
   | ResolveS p v e σ w σ' κs ts :
      head_step e σ κs (Val v) σ' ts →
      head_step (Resolve e (Val $ LitV $ LitProphecy p) (Val w)) σ
-               (κs ++ [(p, (v, w))]) (Val v) σ' ts
+               (κs ++ [(p, (v, w))]) (Val v) σ' ts *)
   (* MARK: new head reductions for new expressions *)
   | LoopBS eb σ v:
     head_step (LoopB eb (Val v)) σ [] (LoopB eb eb) σ []   
@@ -941,45 +1166,111 @@ Inductive head_step : expr → state → list observation → expr → state →
   (* MARK: a more general step relation substitues all control-flow-context-related steps *)
   | CFCtxS e K σ:
      is_cf_terminal e ->  (* already require parameters of control flow evaluate to values *)
-     ~ K = EmptyCtx ->
+     singleton_ectx K ->
      ~ impenetrable_ectx e K ->
      head_step (fill K e) σ [] e σ [].
 
-(** Basic properties about the language *)
-Instance fill_inj K : Inj (=) (=) (fill K).
-Proof. induction K; intros ???; simplify_eq/=; auto with f_equal. Qed.
-
-Lemma fill_sval K e :
-  is_Some (to_sval (fill K e)) → is_Some (to_sval e).
-Proof.
-  intros [v ?]. revert H. revert v.
-  induction K; inversion 1.
-  - rewrite H1. eauto.
-  - destruct (fill K e); inversion H1.
-    apply IHK with (SVal v0). eauto.
-  - destruct (fill K e); inversion H1.
-    apply IHK with (SVal v0). eauto.
-Qed.
-
-Lemma fill_not_sval K e:
-  to_sval e = None → to_sval (fill K e) = None.
+Module NoContinueHeadPreserve.
+Lemma no_continue_state_preserve_head e1 σ1 κ e2 σ2 efs:
+  no_continue_state σ1 ->
+  head_step e1 σ1 κ e2 σ2 efs ->
+  no_continue_state σ2.
 Proof.
   intros.
-  assert (~(is_Some (to_sval e))). {
-    unfold not. rewrite H. apply is_Some_None.
-  }
-  assert (~(is_Some (to_sval (fill K e)))). {
-    unfold not in *. intros. apply fill_sval in H1. auto.
-  }
-  unfold not in H1.
-  destruct (to_sval (fill K e)); auto.
-  exfalso. apply H1. eauto.
+  induction H0; auto.
+  - unfold no_continue_state in *.
+    intros. simpl in H3.
+    apply lookup_union_Some_raw in H3.
+    destruct H3 as [? | [? ?]].
+    + apply heap_array_lookup in H3 as [j [? [? ?]]].
+      apply lookup_replicate_1 in H5 as [? ?].
+      subst; auto.
+    + apply H in H4. auto.
+  - unfold no_continue_state in *.
+    intros. simpl in H2.
+    destruct (loc_eq_decision l l0); subst.
+    + rewrite lookup_insert in H2.
+      inversion H2; subst. auto.
+    + rewrite (lookup_insert_ne _ _ _ _ n) in H2.
+      apply H in H2; auto.
+  - clear H3; destruct b; auto.
+    unfold no_continue_state in *.
+    intros. simpl in H2.
+    destruct (loc_eq_decision l l0); subst.
+    + rewrite lookup_insert in H3.
+      inversion H3; subst. auto.
+    + rewrite (lookup_insert_ne _ _ _ _ n) in H3.
+      apply H in H3; auto.
+  - unfold no_continue_state in *.
+    intros. simpl in H1.
+    destruct (loc_eq_decision l l0); subst.
+    + rewrite lookup_insert in H1.
+      inversion H1; subst.
+      simpl; auto.
+    + rewrite (lookup_insert_ne _ _ _ _ n) in H1.
+      apply H in H1; auto.
 Qed.
+
+Lemma no_continue_subst x v e:
+  no_continue_val v ->
+  no_continue e ->
+  no_continue (subst' x v e).
+Proof.
+  intros.
+  unfold subst'.
+  destruct x; auto.
+  induction e; simpl in *; auto;
+  try (split; try destruct H0 as [? [? ?]]; try destruct H0; auto).
+  - destruct (decide (s = x)); auto.
+  - destruct (decide ((BNamed s) ≠ f ∧ (BNamed s) ≠ x)); auto.
+Qed.
+
+Lemma no_continue_preserve_head e1 σ1 κ e2 σ2 efs :
+  no_continue_state σ1 ->  
+  head_step e1 σ1 κ e2 σ2 efs ->
+  no_continue e1 -> no_continue e2.
+Proof.
+  intro HStateNoContinue.
+  intros.
+  destruct e1; intros; simpl in H0; try inversion H0;
+  inversion H; subst; simpl; auto;
+  try match goal with
+  | H: head_step ?e1 _ _ ?e2 _ _, H1: fill ?K ?e2 = ?e1 |- ?P =>
+    destruct_inversion K H1
+  end;
+  try match goal with
+  | H: expr_depth.singleton_ectx _ |- ?P =>
+    unfold expr_depth.singleton_ectx in H;
+    inversion H;
+    try match goal with
+    | H: expr_depth.ectx_depth ?K = 0%nat |- ?P =>
+      destruct_inversion K H; auto
+    end
+  end;
+  (* try (destruct H2; simpl; auto); *)
+  (* try (destruct H0; auto); *)
+  try apply (no_continue_un_op _ _ _ H0 H8);
+  try (destruct H0; apply (no_continue_bin_op _ _ _ _ H0 H3 H11)).
+  - apply no_continue_subst; auto.
+    apply no_continue_subst; auto.
+  - destruct H2; auto.
+  - destruct H2. auto.
+  - destruct H0; auto.
+  - destruct H0; auto.
+  - destruct H0, H2; auto.
+  - destruct H0, H2; auto.
+  - apply HStateNoContinue in H2; auto.
+  - apply HStateNoContinue in H7; auto.
+  - simpl in H2; tauto.
+  - simpl in H2; tauto.
+Qed.
+End NoContinueHeadPreserve.
 
 Lemma sval_head_stuck e1 σ1 κ e2 σ2 efs : head_step e1 σ1 κ e2 σ2 efs → to_sval e1 = None.
 Proof.
   destruct 1; try naive_solver; try (destruct K; naive_solver).
   destruct K; try congruence; try naive_solver.
+  - unfold singleton_ectx in H0; naive_solver.
   - simpl; destruct (fill K e) eqn: HK; auto.
     destruct K; inversion HK.
     simpl in HK. rewrite HK in H.
@@ -1024,6 +1315,14 @@ Proof.
     inversion H1.
 Qed.
 
+Lemma val_prim_stuck e1 σ1 κ e2 σ2 efs : prim_step e1 σ1 κ e2 σ2 efs → to_val e1 = None.
+Proof.
+  intros.
+  apply sval_prim_stuck in H.
+  destruct e1; simpl in *; eauto.
+  inversion H.
+Qed.
+
 (* Not sure required or not *)
 Lemma fill_step e1 σ1 κ e2 σ2 efs K:
   prim_step e1 σ1 κ e2 σ2 efs →
@@ -1035,38 +1334,111 @@ Proof.
   apply Ectx_step with (comp_ectx K K0) e1' e2'; auto.
 Qed.
 
+Lemma step_by_val K K' e1 e1' σ1 κ e2 σ2 efs :
+  fill K e1 = fill K' e1' →
+  to_sval e1 = None →
+  head_step e1' σ1 κ e2 σ2 efs →
+  ∃ K'', K' = comp_ectx K K''.
+Proof.
+  intros.
+  revert K' H.
+  induction K; simpl; intros; eauto;
+  destruct_inversion K' H;
+  try match goal with
+  | H: fill ?K1 ?e1 = fill ?K2 ?e2 |- ?P => pose proof IHK _ H as [? ?]; subst; eauto
+  | H0: Val _ = fill ?K ?e, H1: head_step ?e _ _ _ _ _ |- ?P =>
+    destruct_inversion K H0; inversion H1; subst;
+    match goal with
+    | H0: fill ?K ?e = Val _, H1: is_cf_terminal ?e |- ?P =>
+      destruct_inversion K H0; inversion H1
+    end
+  | H0: fill ?K ?e = Val _, H1: to_sval ?e = None |- ?P =>
+    destruct_inversion K H0; inversion H1
+  end;
+  inversion H1; subst;
+  try match goal with
+  | H: Val _ = fill ?K ?e, H0: to_sval _ = None |- ?P =>
+    destruct_inversion K H; inversion H0
+  | H: fill ?K ?e = _, H0: singleton_ectx _ |- ?P =>
+    destruct_inversion K H;
+    unfold singleton_ectx in H0; simpl H0; inversion H0;
+    destruct_inversion K0 H0;
+    try match goal with
+    | H: fill EmptyCtx _ = fill ?K _, H0: is_cf_terminal _,
+      H1: to_sval _ = None |- ?P =>
+      simpl in H; subst; destruct_inversion K H0; inversion H1;
+      match goal with
+      | H: Val _ = fill ?K _, H0: to_sval _ = None |- ?P =>
+        destruct_inversion K H; inversion H0
+      end
+    end;
+    try match goal with
+    | H: fill EmptyCtx ?e = Val _, H0: is_cf_terminal ?e |- ?P =>
+      simpl in H; subst; inversion H0
+    end
+  end;
+  try match goal with
+  | H: Val _ = fill ?K _, H0: to_sval _ = None |- ?P =>
+    destruct_inversion K H; inversion H0
+  | H: _ = fill ?K _, H0: to_sval _ = None |- ?P =>
+    destruct_inversion K H; inversion H0;
+    match goal with
+    | H: Val _ = fill ?K _ |- ?P =>
+      destruct_inversion K H; inversion H0
+    end
+  end.
+Qed.
+
+Lemma fill_step_inv K e1 σ1 κ e2 σ2 efs :
+  to_sval e1 = None → prim_step (fill K e1) σ1 κ e2 σ2 efs →
+  ∃ e3, e2 = fill K e3 ∧ prim_step e1 σ1 κ e3 σ2 efs.
+Proof.
+  intros Hnval [K'' e1'' e2'' Heq1 -> Hstep].
+  destruct (step_by_val K K'' e1 e1'' σ1 κ e2'' σ2 efs) as [K' ->]; eauto.
+  rewrite -fill_comp in Heq1; apply (inj (fill _)) in Heq1.
+  exists (fill K' e2''); rewrite -fill_comp; split; auto; subst.
+  apply Ectx_step with K' e1'' e2''; auto.
+Qed.
+
 (* Lemma fill_item_no_val_inj Ki1 Ki2 e1 e2 :
   to_val e1 = None → to_val e2 = None →
   fill_item Ki1 e1 = fill_item Ki2 e2 → Ki1 = Ki2.
 Proof. revert Ki1. induction Ki2, Ki1; naive_solver eauto with f_equal. Qed. *)
 
 Lemma alloc_fresh v n σ :
+  (* MARK: *)
+  no_continue_val v ->
   let l := fresh_locs (dom (gset loc) σ.(heap)) in
   0 < n →
   head_step (AllocN ((Val $ LitV $ LitInt $ n)) (Val v)) σ []
             (Val $ LitV $ LitLoc l) (state_init_heap l n v σ) [].
 Proof.
   intros.
-  apply AllocNS; first done.
+  apply AllocNS; auto.
   intros. apply (not_elem_of_dom (D := gset loc)).
   by apply fresh_locs_fresh.
 Qed.
 
-Lemma new_proph_id_fresh σ :
+(* Lemma new_proph_id_fresh σ :
   let p := fresh σ.(used_proph_id) in
   head_step NewProph σ [] (Val $ LitV $ LitProphecy p) (state_upd_used_proph_id ({[ p ]} ∪.) σ) [].
-Proof. constructor. apply is_fresh. Qed.
+Proof. constructor. apply is_fresh. Qed. *)
 
 Lemma cf_lang_mixin : LanguageMixin of_sval to_sval prim_step.
 Proof.
   split; apply _ || eauto using to_of_sval, of_to_sval, sval_prim_stuck.
+Qed.
+
+Lemma aux_lang_mixin : LanguageMixin of_val to_val prim_step.
+Proof.
+  split; apply _ || eauto using to_of_val, of_to_val, val_prim_stuck.
 Qed.
 End cf_lang.
 
 (** Language *)
 Canonical Structure cf_lang := Language cf_lang.cf_lang_mixin.
 
-(* Prefer heap_lang names over ectx_language names. *)
+(* Prefer cf_lang names over ectx_language names. *)
 Export cf_lang.
 
 (* DONE: congruence/deterministic lemma is no longer needed
@@ -1084,6 +1456,271 @@ Lemma prim_step_congruence e e1 e2 σ σ1 σ2 κ1 κ2 efs1 efs2:
 Proof.
 Admitted. *)
 
+Module fill_no_val_inj.
+Import expr_depth.
+Import Omega.
+(* Canonical Structure aux_lang := Language aux_lang_mixin. *)
+
+Lemma fill_no_val_inj e K1 K2:
+  to_val e = None ->
+  fill K1 e = fill K2 e → K1 = K2.
+Proof.
+  intros ?.
+  revert K1.
+  induction K2, K1; try (simpl in *; naive_solver eauto with f_equal);
+  try (intros Hdep; apply (f_equal expr_depth) in Hdep; simpl in Hdep; rewrite (fill_depth _ _ H) in Hdep;
+  try rewrite (fill_not_val K1 _ H) in Hdep; try rewrite (fill_not_val K2 _ H) in Hdep;
+  omega);
+  try (intros Hdep; apply (f_equal expr_depth) in Hdep; repeat rewrite (fill_depth _ _ H) in Hdep; simpl in Hdep;
+  try rewrite (fill_not_val K1 _ H) in Hdep; try rewrite (fill_not_val K2 _ H) in Hdep;
+  omega);
+  try
+  (simpl; inversion 1; subst;
+  match goal with
+  | HK: fill ?K ?e = Val ?v |- ?P => destruct_inversion K HK; inversion H
+  | HK: Val ?v = fill ?K ?e |- ?P => destruct_inversion K HK; inversion H
+  end).
+Qed.
+End fill_no_val_inj.
+Import fill_no_val_inj.
+
+Lemma comp_empty K:
+  comp_ectx K EmptyCtx = K.
+Proof.
+  induction K; simpl; try rewrite IHK; eauto.
+Qed.
+
+Lemma comp_assoc K1 K2 K3:
+  comp_ectx (comp_ectx K1 K2) K3 = comp_ectx K1 (comp_ectx K2 K3).
+Proof.
+  revert K2 K3.
+  induction K1; intros; simpl; try rewrite comp_empty; try rewrite IHK1; eauto.
+Qed.
+
+Lemma comp_penetrable e K1 K2:
+  ~ impenetrable_ectx e (comp_ectx K1 K2) ->
+  ~ impenetrable_ectx e K1 /\ ~ impenetrable_ectx e K2.
+Proof.
+  intros.
+  split; unfold not in *;
+  intros; apply H; clear H.
+  {
+    induction H0; simpl;
+    [constructor|constructor|constructor|constructor|constructor|].
+    rewrite comp_assoc; constructor; auto.
+  }
+  {
+    destruct K1; auto; try constructor; auto.
+  }
+Qed.
+
+Lemma cf_step_congruence e1 K1 σ1 κ e2 σ2 efs:
+  is_cf_terminal e1 ->
+  ¬ impenetrable_ectx e1 K1 ->
+  head_step (fill K1 e1) σ1 κ e2 σ2 efs ->
+  e1 = e2 ∧ σ1 = σ2 ∧ κ = [] ∧ efs = [].
+Proof.
+  intros.
+  remember (fill K1 e1) as e1'.
+  revert K1 Heqe1' H0.
+  destruct H;
+  induction H1; intros; subst;
+  match goal with
+  | _: is_cf_terminal ?e1 |- ?P => idtac
+  | |- ?P =>
+    (destruct_inversion K1 Heqe1';
+    try
+    match goal with
+    | HK: Val _ = fill ?K _ |- ?P => destruct_inversion K HK
+    end;
+    try
+    match goal with
+    | Hpen: ~ impenetrable_ectx _ _ |- ?P => exfalso; apply Hpen; constructor
+    end)
+  end.
+  (* - assert (fill K1 (EBreak (Val v)) = fill K1 (EBreak (Val v))); auto.
+    replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H0; auto.
+    apply comp_penetrable in H0 as [_ ?].
+    pose proof IHhead_step K1 H H0 as [? _].
+    inversion H2. *)
+  - clear H0 H1 H2.
+    repeat split; auto.
+    destruct H;
+    [repeat f_equal | exfalso | exfalso];
+    revert K1 Heqe1';
+    induction K; intros; simpl in *; destruct_inversion K1 Heqe1'; auto;
+    try
+    match goal with
+    | H: fill _ _ = fill _ _ |- ?P => apply IHK in H; auto
+    end;
+    try
+    match goal with
+    | H: Val _ = fill ?K _ |- ?P => destruct_inversion K H
+    | H: fill ?K _ = Val _ |- ?P => destruct_inversion K H
+    end.
+  (* - assert (fill K1 EContinue = fill K1 EContinue); auto.
+    replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H0; auto.
+    apply comp_penetrable in H0 as [_ ?].
+    pose proof IHhead_step K1 H H0 as [? _].
+    inversion H2. *)
+  - clear H0 H1 H2.
+    repeat split; auto.
+    destruct H;
+    [exfalso | repeat f_equal | exfalso];
+    revert K1 Heqe1';
+    induction K; intros; simpl in *; destruct_inversion K1 Heqe1'; auto;
+    try
+    match goal with
+    | H: fill _ _ = fill _ _ |- ?P => apply IHK in H; auto
+    end;
+    try
+    match goal with
+    | H: Val _ = fill ?K _ |- ?P => destruct_inversion K H
+    | H: fill ?K _ = Val _ |- ?P => destruct_inversion K H
+    end.
+  (* - assert (fill K1 (EReturn (Val v)) = fill K1 (EReturn (Val v))); auto.
+    replace (ResolveLCtx K1 (LitV (LitProphecy p)) v2) with (comp_ectx (ResolveLCtx EmptyCtx (LitV (LitProphecy p)) v2) K1) in H0; auto.
+    apply comp_penetrable in H0 as [_ ?].
+    pose proof IHhead_step K1 H H0 as [? _].
+    inversion H2. *)
+  - destruct_inversion K1 H2.
+    destruct_inversion K1 H1.
+  - destruct_inversion K1 H2.
+  - clear H0 H1 H2.
+    repeat split; auto.
+    destruct H;
+    [exfalso | exfalso | repeat f_equal];
+    revert K1 Heqe1';
+    induction K; intros; simpl in *; destruct_inversion K1 Heqe1'; auto;
+    try
+    match goal with
+    | H: fill _ _ = fill _ _ |- ?P => apply IHK in H; auto
+    end;
+    try
+    match goal with
+    | H: Val _ = fill ?K _ |- ?P => destruct_inversion K H
+    | H: fill ?K _ = Val _ |- ?P => destruct_inversion K H
+    end.
+Qed.
+
+Lemma fill_cf_inv e1 e2 K1 K2:
+  is_cf_terminal e1 ->
+  fill K1 e1 = fill K2 e2 ->
+  (∃ v : val, e2 = Val v) ∨ (∃ K3 : ectx, e2 = fill K3 e1).
+Proof.
+  intros H.
+  revert K2.
+  destruct H;
+  induction K1; intros; simpl in *;
+  destruct_inversion K2 H;
+  try apply IHK1 in H0;
+  try apply IHK1 in H1;
+  try apply IHK1 in H2;
+  try apply IHK1 in H3;
+  auto;
+  try 
+  match goal with
+  | HK: Val ?v = fill ?K ?e |- ?P => left; destruct_inversion K HK; eauto
+  | HK: fill ?K ?e = Val ?v |- ?P => left; destruct_inversion K HK; eauto
+  end.
+  - right; exists EmptyCtx; eauto.
+  - right; exists (AppLCtx K1 v2); eauto.
+  - right; exists (AppRCtx e1 K1); eauto.
+  - right; exists (UnOpCtx op K1); eauto.
+  - right; exists (BinOpLCtx op K1 v2); eauto.
+  - right; exists (BinOpRCtx op e1 K1); eauto.
+  - right; exists (IfCtx K1 e1 e0); eauto.
+  - right; exists (PairLCtx K1 v2); eauto.
+  - right; exists (PairRCtx e1 K1); eauto.
+  - right; exists (FstCtx K1); eauto.
+  - right; exists (SndCtx K1); eauto.
+  - right; exists (InjLCtx K1); eauto.
+  - right; exists (InjRCtx K1); eauto.
+  - right; exists (CaseCtx K1 e1 e0); eauto.
+  - right; exists (AllocNLCtx K1 v2); eauto.
+  - right; exists (AllocNRCtx e1 K1); eauto.
+  - right; exists (LoadCtx K1); eauto.
+  - right; exists (StoreLCtx K1 v2); eauto.
+  - right; exists (StoreRCtx e1 K1); eauto.
+  - right; exists (CmpXchgLCtx K1 v1 v2); eauto.
+  - right; exists (CmpXchgMCtx e0 K1 v2); eauto.
+  - right; exists (CmpXchgRCtx e0 e1 K1); eauto.
+  - right; exists (FaaLCtx K1 v2); eauto.
+  - right; exists (FaaRCtx e1 K1); eauto.
+  (* - right; exists (ResolveLCtx K1 v1 v2); eauto. *)
+  (* - right; exists (ResolveMCtx e0 K1 v2); eauto. *)
+  (* - right; exists (ResolveRCtx e0 e1 K1); eauto. *)
+  - right; exists (LoopBCtx eb K1); eauto.
+  - right; exists (BreakCtx K1); eauto.
+  - right; exists (CallCtx K1); eauto.
+  - right; exists (ReturnCtx K1); eauto.
+  
+  - right; exists EmptyCtx; eauto.
+  - right; exists (AppLCtx K1 v2); eauto.
+  - right; exists (AppRCtx e1 K1); eauto.
+  - right; exists (UnOpCtx op K1); eauto.
+  - right; exists (BinOpLCtx op K1 v2); eauto.
+  - right; exists (BinOpRCtx op e1 K1); eauto.
+  - right; exists (IfCtx K1 e1 e0); eauto.
+  - right; exists (PairLCtx K1 v2); eauto.
+  - right; exists (PairRCtx e1 K1); eauto.
+  - right; exists (FstCtx K1); eauto.
+  - right; exists (SndCtx K1); eauto.
+  - right; exists (InjLCtx K1); eauto.
+  - right; exists (InjRCtx K1); eauto.
+  - right; exists (CaseCtx K1 e1 e0); eauto.
+  - right; exists (AllocNLCtx K1 v2); eauto.
+  - right; exists (AllocNRCtx e1 K1); eauto.
+  - right; exists (LoadCtx K1); eauto.
+  - right; exists (StoreLCtx K1 v2); eauto.
+  - right; exists (StoreRCtx e1 K1); eauto.
+  - right; exists (CmpXchgLCtx K1 v1 v2); eauto.
+  - right; exists (CmpXchgMCtx e0 K1 v2); eauto.
+  - right; exists (CmpXchgRCtx e0 e1 K1); eauto.
+  - right; exists (FaaLCtx K1 v2); eauto.
+  - right; exists (FaaRCtx e1 K1); eauto.
+  (* - right; exists (ResolveLCtx K1 v1 v2); eauto. *)
+  (* - right; exists (ResolveMCtx e0 K1 v2); eauto. *)
+  (* - right; exists (ResolveRCtx e0 e1 K1); eauto. *)
+  - right; exists (LoopBCtx eb K1); eauto.
+  - right; exists (BreakCtx K1); eauto.
+  - right; exists (CallCtx K1); eauto.
+  - right; exists (ReturnCtx K1); eauto.
+  
+  - right; exists EmptyCtx; eauto.
+  - right; exists (AppLCtx K1 v2); eauto.
+  - right; exists (AppRCtx e1 K1); eauto.
+  - right; exists (UnOpCtx op K1); eauto.
+  - right; exists (BinOpLCtx op K1 v2); eauto.
+  - right; exists (BinOpRCtx op e1 K1); eauto.
+  - right; exists (IfCtx K1 e1 e0); eauto.
+  - right; exists (PairLCtx K1 v2); eauto.
+  - right; exists (PairRCtx e1 K1); eauto.
+  - right; exists (FstCtx K1); eauto.
+  - right; exists (SndCtx K1); eauto.
+  - right; exists (InjLCtx K1); eauto.
+  - right; exists (InjRCtx K1); eauto.
+  - right; exists (CaseCtx K1 e1 e0); eauto.
+  - right; exists (AllocNLCtx K1 v2); eauto.
+  - right; exists (AllocNRCtx e1 K1); eauto.
+  - right; exists (LoadCtx K1); eauto.
+  - right; exists (StoreLCtx K1 v2); eauto.
+  - right; exists (StoreRCtx e1 K1); eauto.
+  - right; exists (CmpXchgLCtx K1 v1 v2); eauto.
+  - right; exists (CmpXchgMCtx e0 K1 v2); eauto.
+  - right; exists (CmpXchgRCtx e0 e1 K1); eauto.
+  - right; exists (FaaLCtx K1 v2); eauto.
+  - right; exists (FaaRCtx e1 K1); eauto.
+  (* - right; exists (ResolveLCtx K1 v1 v2); eauto. *)
+  (* - right; exists (ResolveMCtx e0 K1 v2); eauto. *)
+  (* - right; exists (ResolveRCtx e0 e1 K1); eauto. *)
+  - right; exists (LoopBCtx eb K1); eauto.
+  - right; exists (BreakCtx K1); eauto.
+  - right; exists (CallCtx K1); eauto.
+  - right; exists (ReturnCtx K1); eauto.
+Qed.
+
+
 Lemma break_penetrable_preservation v K σ1 κ e2 σ2 efs:
   ¬ impenetrable_ectx (EBreak $ Val v) K ->
   prim_step (fill K (EBreak $ Val v)) σ1 κ e2 σ2 efs ->
@@ -1093,31 +1730,20 @@ Proof.
   intros.
   inversion H0; subst.
 
-  (* inversion H3; subst.
-  {
-    destruct K, K0; simpl in *;
-    inversion H1.
-    destruct K0; simpl in *; inversion H4.
-    try (destruct K0; simpl in *; inversion H4).
-    
-  }
+  pose proof fill_cf_inv _ _ _ _ (break_is_cft _) H1 as [[v' ?] | [K1 ?]]; subst;
+  [inversion H3; subst; destruct_inversion K1 H2; inversion H5 |].
 
-  assert (exists K1, e1' = fill K1 (EBreak (Val v))).
-  {
-    
-  }
+  rewrite fill_comp in H1.
 
+  apply fill_no_val_inj in H1; auto; subst.
+  
+  apply comp_penetrable in H as [? ?].
 
-  destruct K.
-  - simpl in *. apply val_stuck in H0.
-    inversion H0.
-  - inversion H0; subst.
-    destruct K0; inversion H1; simpl in *; subst.
-    + inversion H3; subst; [destruct K; inversion H1 |].
-      repeat split; auto. *)
-
-Admitted.
-
+  pose proof cf_step_congruence _ _ _ _ _ _ _ (break_is_cft _) H1 H3 as [? [? [? ?]]]; subst.
+  repeat split; auto.
+  exists K0.
+  split; auto.
+Qed.
 
 Lemma continue_penetrable_preservation K σ1 κ e2 σ2 efs:
   ¬ impenetrable_ectx EContinue K ->
@@ -1125,7 +1751,23 @@ Lemma continue_penetrable_preservation K σ1 κ e2 σ2 efs:
   σ1 = σ2 /\ κ = [] /\ efs = [] /\
   exists K', e2 = fill K' EContinue /\ ¬ impenetrable_ectx EContinue K'.
 Proof.
-Admitted.
+  intros.
+  inversion H0; subst.
+
+  pose proof fill_cf_inv _ _ _ _ continue_is_cft H1 as [[v' ?] | [K1 ?]]; subst;
+  [inversion H3; subst; destruct_inversion K1 H2; inversion H5 |].
+
+  rewrite fill_comp in H1.
+
+  apply fill_no_val_inj in H1; auto; subst.
+  
+  apply comp_penetrable in H as [? ?].
+
+  pose proof cf_step_congruence _ _ _ _ _ _ _ continue_is_cft H1 H3 as [? [? [? ?]]]; subst.
+  repeat split; auto.
+  exists K0.
+  split; auto.
+Qed.
 
 Lemma return_penetrable_preservation v K σ1 κ e2 σ2 efs:
   ¬ impenetrable_ectx (EReturn $ Val v) K ->
@@ -1133,8 +1775,158 @@ Lemma return_penetrable_preservation v K σ1 κ e2 σ2 efs:
   σ1 = σ2 /\ κ = [] /\ efs = [] /\
   exists K', e2 = fill K' (EReturn $ Val v) /\ ¬ impenetrable_ectx (EReturn $ Val v) K'.
 Proof.
-Admitted.
+  intros.
+  inversion H0; subst.
 
+  pose proof fill_cf_inv _ _ _ _ (return_is_cft _) H1 as [[v' ?] | [K1 ?]]; subst;
+  [inversion H3; subst; destruct_inversion K1 H2; inversion H5 |].
+
+  rewrite fill_comp in H1.
+
+  apply fill_no_val_inj in H1; auto; subst.
+  
+  apply comp_penetrable in H as [? ?].
+
+  pose proof cf_step_congruence _ _ _ _ _ _ _ (return_is_cft _) H1 H3 as [? [? [? ?]]]; subst.
+  repeat split; auto.
+  exists K0.
+  split; auto.
+Qed.
+
+Lemma my_reducible_fill K e σ :
+reducible e σ → reducible (fill K e) σ.
+Proof. unfold reducible in *. naive_solver eauto using fill_step. Qed.
+
+
+
+Definition outer (K : ectx) : ectx :=
+  match K with
+  | EmptyCtx => EmptyCtx
+  | AppLCtx _ v2 => AppLCtx EmptyCtx v2
+  | AppRCtx e1 _ => AppRCtx e1 EmptyCtx
+  | UnOpCtx op _ => UnOpCtx op EmptyCtx
+  | BinOpLCtx op _ v2 => BinOpLCtx op EmptyCtx v2
+  | BinOpRCtx op e1 _ => BinOpRCtx op e1 EmptyCtx
+  | IfCtx _ e1 e2 => IfCtx EmptyCtx e1 e2
+  | PairLCtx _ v2 => PairLCtx EmptyCtx v2
+  | PairRCtx e1 _ => PairRCtx e1 EmptyCtx
+  | FstCtx _ => FstCtx EmptyCtx
+  | SndCtx _ => SndCtx EmptyCtx
+  | InjLCtx _ => InjLCtx EmptyCtx
+  | InjRCtx _ => InjRCtx EmptyCtx
+  | CaseCtx _ e1 e2 => CaseCtx EmptyCtx e1 e2
+  | AllocNLCtx _ v2 => AllocNLCtx EmptyCtx v2
+  | AllocNRCtx e1 _ => AllocNRCtx e1 EmptyCtx
+  | LoadCtx _ => LoadCtx EmptyCtx
+  | StoreLCtx _ v2 => StoreLCtx EmptyCtx v2
+  | StoreRCtx e1 _ => StoreRCtx e1 EmptyCtx
+  | CmpXchgLCtx _ v1 v2 => CmpXchgLCtx EmptyCtx v1 v2
+  | CmpXchgMCtx e0 _ v2 => CmpXchgMCtx e0 EmptyCtx v2
+  | CmpXchgRCtx e0 e1 _ => CmpXchgRCtx e0 e1 EmptyCtx
+  | FaaLCtx _ v2 => FaaLCtx EmptyCtx v2
+  | FaaRCtx e1 _ => FaaRCtx e1 EmptyCtx
+  (* | ResolveLCtx _ v1 v2 => Resolve (fill _ e) (Val v1) (Val v2) *)
+  (* | ResolveMCtx ex _ v2 => Resolve ex (fill _ e) (Val v2) *)
+  (* | ResolveRCtx ex e1 _ => Resolve ex e1 (fill _ e) *)
+  (* MARK: new rules for new contexts *)
+  | LoopBCtx eb _ => LoopBCtx eb EmptyCtx
+  | BreakCtx _ => BreakCtx EmptyCtx
+  | CallCtx _ => CallCtx EmptyCtx
+  | ReturnCtx _ => ReturnCtx EmptyCtx
+  end.
+
+Definition inner (K : ectx) : ectx :=
+  match K with
+  | EmptyCtx => EmptyCtx
+  | AppLCtx K _ | AppRCtx _ K
+  | UnOpCtx _ K | BinOpLCtx _ K _
+  | BinOpRCtx _ _ K | IfCtx K _ _
+  | PairLCtx K _ | PairRCtx _ K
+  | FstCtx K | SndCtx K
+  | InjLCtx K | InjRCtx K
+  | CaseCtx K _ _ | AllocNLCtx K _
+  | AllocNRCtx _ K | LoadCtx K
+  | StoreLCtx K _ | StoreRCtx _ K
+  | CmpXchgLCtx K _ _ | CmpXchgMCtx _ K _
+  | CmpXchgRCtx _ _ K | FaaLCtx K _
+  | FaaRCtx _ K
+  | LoopBCtx _ K | BreakCtx K
+  | CallCtx K | ReturnCtx K
+    => K
+  end.
+
+(* TODO: move to lang.v *)
+Lemma cf_reducible: forall e K σ,
+  is_cf_terminal e ->
+  ¬ impenetrable_ectx e K ->
+  to_sval (fill K e) = None ->
+  reducible (fill K e) σ.
+Proof.
+  intros.
+  destruct H;
+  induction K; simpl in H1; inversion H1;
+  match goal with
+  | IHK: _ -> _ -> reducible (fill ?K'' _) _ |- reducible (fill ?K' ?e) ?σ =>
+    match K' with
+    (* | LoopBCtx _ _ => idtac *)
+    | CallCtx _ =>
+      match e with
+      | EReturn _ => idtac
+      | _ => exfalso; apply H0; constructor
+      end
+    | _ =>
+      match goal with | |- reducible (fill ?K' _) _ =>
+        destruct (to_sval (fill K'' e)) eqn:eq; 
+        [
+          destruct K''; simpl in eq; inversion eq;
+          match K' with
+          | BreakCtx _ => 
+          pose K''; (* FIXME: why pose K'' *)
+          try destruct_inversion K'' H3
+          | ReturnCtx _ =>
+          pose K''; (* FIXME: why pose K'' *)
+          try destruct_inversion K'' H3
+          | LoopBCtx ?eb ?K0 => 
+            try destruct_inversion K'' H2;
+            let e' :=
+              match e with
+              | EReturn _ => e | EBreak e => e
+              (* | EContinue => (LoopB eb eb) *)
+              end in
+              exists nil, e', σ, nil; simpl;
+              apply Ectx_step with EmptyCtx (fill (LoopBCtx eb K0) e) e'; auto; constructor
+          | _ =>
+            match goal with | |- reducible (fill ?K' _) _ =>
+              try destruct_inversion K'' H2;
+              exists nil, e, σ, nil; pose K';
+              apply Ectx_step with EmptyCtx (fill (outer K') e) e;
+              auto; constructor; 
+              unfold expr_depth.singleton_ectx; auto; constructor
+            end
+          end
+        |
+          (* exfalso; apply FF *)
+          replace (fill K' e) with (fill (outer K') (fill (inner K') e));
+          replace K' with (comp_ectx (outer K') (inner K')) in H0; auto;
+          apply comp_penetrable in H0 as [_ ?];
+          apply my_reducible_fill; auto
+        ]
+      end
+    end
+  end.
+
+  destruct (to_sval (fill K (EReturn $ Val v))) eqn:eq.
+  - destruct K; simpl in eq; inversion eq.
+    + exists nil, (Val v), σ, nil.
+      apply Ectx_step with EmptyCtx (fill (CallCtx EmptyCtx) (EReturn $ Val v)) (Val v); auto.
+      constructor.
+    + destruct_inversion K H2.
+    + destruct_inversion K H2.
+  - replace (fill (CallCtx K) (EReturn $ Val v)) with (fill (CallCtx EmptyCtx) (fill K (EReturn $ Val v))); auto.
+    replace (CallCtx K) with (comp_ectx (CallCtx EmptyCtx) K) in H0; auto.
+    apply comp_penetrable in H0 as [_ ?]; auto.
+    apply my_reducible_fill; auto.
+Qed.
 
 (* (** The following lemma is not provable using the axioms of [ectxi_language].
 The proof requires a case analysis over context items ([destruct i] on the
