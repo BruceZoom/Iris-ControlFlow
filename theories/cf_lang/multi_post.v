@@ -17,6 +17,7 @@ Class heapG Σ := HeapG {
   heapG_proph_mapG :> proph_mapG proph_id (val * val) Σ
 }.
 
+(* TODO: change state interpretation here *)
 Instance heapG_irisG `{!heapG Σ} : irisG cf_lang Σ := {
   iris_invG := heapG_invG;
   state_interp σ κs _ :=
@@ -1306,14 +1307,16 @@ Section strong_no_continue.
   Lemma no_continue_preserve e1 σ1 κ e2 σ2 efs :
     no_continue_state σ1 ->
     prim_step e1 σ1 κ e2 σ2 efs ->
-    no_continue e1 -> no_continue e2.
+    no_continue e1 -> no_continue e2 /\ no_continue_state σ2.
   Proof.
     intro HStateNoContinue.
     intros.
     inversion H; subst.
     pose proof no_continue_fill _ _ H0.
-    apply no_continue_preserve_head in H3; auto.
-    apply (no_continue_fill_subst _ _ _ H0 H3).
+    split.
+    - apply no_continue_preserve_head in H3; auto.
+      apply (no_continue_fill_subst _ _ _ H0 H3).
+    - apply no_continue_state_preserve_head in H3; auto.
   Qed.
 
   Lemma wp_no_continue_sval e s φn φb φr φ1 φ2:
@@ -1352,20 +1355,20 @@ Section strong_no_continue.
   Lemma wp_no_continue e φn φb φr φ1 φ2:
     no_continue e ->
     (* (∀ l v, l ↦ v -∗ ⌜no_continue_val v⌝) ∗ *)
-    □ (∀ σ, gen_heap_ctx (heap σ) -∗ (gen_heap_ctx (heap σ) ∗ ⌜no_continue_state σ⌝ ))%I ∗
+    (∀ σ, gen_heap_ctx (heap σ) -∗ (gen_heap_ctx (heap σ) ∗ ⌜no_continue_state σ⌝ ))%I ∗
     (* also require heap to be well formed *)
     WP e {{ φn }} {{ φb }} {{ φ1 }} {{ φr }} ⊢
     WP e {{ φn }} {{ φb }} {{ φ2 }} {{ φr }}.
   Proof.
-    iIntros (H) "[#HNCS H]".
+    iIntros (H) "[HNCS H]".
     destruct (to_sval e) eqn:eq.
     {
       iApply (wp_no_continue_sval e _ φn φb φr φ1 φ2 eq H with "H").
     }
     {
-      iRevert (e eq H) "H".
+      iRevert (e eq H) "H HNCS".
       iLöb as "IH".
-      iIntros (e eq H) "H".
+      iIntros (e eq H) "H HNCS".
       rewrite wp_unfold /wp_pre; simpl.
       rewrite wp_unfold /wp_pre; simpl.
       rewrite eq.
@@ -1411,13 +1414,14 @@ Section strong_no_continue.
       iDestruct "H" as "[Hw [Hphi [Hs [H Hefs]]]]".
       iFrame "Hw".
       iFrame "Hphi".
+
       iFrame "Hs".
       iFrame "Hefs".
 
-      apply no_continue_preserve in Hstep; auto.
+      apply no_continue_preserve in Hstep as [? ?]; auto.
       destruct (to_sval e2) eqn:eq'.
       {
-        iApply (wp_no_continue_sval e2 _ φn φb φr φ1 φ2 eq' Hstep with "H").
+        iApply (wp_no_continue_sval e2 _ φn φb φr φ1 φ2 eq' H2 with "H").
       }
       {
         iApply ("IH" $! e2 eq' Hstep with "H").
