@@ -1,9 +1,10 @@
 BSD 3-Clause License
 
+The project implements a program logic to support control flows by weakest preconditions with multiple post-conditions and proves related proof rules.
+The project is based on the Iris project, the original license of which is attached in the end.
+
 Copyright (c) 2021, Iris-CF developers and contributors
 All rights reserved.
-
-The original license of Iris is attached in the end.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
