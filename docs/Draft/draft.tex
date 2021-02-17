@@ -1,0 +1,424 @@
+\documentclass{article}
+% \usepackage[UTF8]{ctex}
+\usepackage{color,amsmath,amssymb,graphicx,fancyhdr,amsfonts,amsthm,algorithmic,verbatim,bbold}
+\usepackage{algorithm,hyperref}
+\usepackage{mkolar_definitions}
+\usepackage{extpfeil}
+\usepackage{mathpartir}
+\usepackage{wasysym}
+\usepackage[mathscr]{eucal}
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{relsize}
+\usepackage[left=2cm,top=2cm,right=2cm]{geometry}
+\numberwithin{algorithm}{section}
+
+\newcommand{\doublebrackets}[1]{[\![ #1 ]\!]}
+\newcommand{\progspec}[1]{\{ #1 \}}
+\newcommand{\tuple}[1]{\langle #1 \rangle}
+
+\newcommand{\true}{\texttt{true}}
+\newcommand{\false}{\texttt{false}}
+\newcommand{\cmdref}{\texttt{ref}}
+\newcommand{\cmdfork}[1]{\texttt{fork}\{#1\}}
+\newcommand{\cmdloop}[1]{\texttt{loop}_{#1}\,}
+\newcommand{\cmdbreak}{\texttt{break}\,}
+\newcommand{\cmdcontinue}{\texttt{continue}}
+\newcommand{\cmdreturn}{\texttt{return}\,}
+\newcommand{\cmdif}{\texttt{if}\,}
+\newcommand{\cmdthen}{\,\texttt{then}\,}
+\newcommand{\cmdelse}{\,\texttt{else}\,}
+\newcommand{\cmdseq}{\,;;\,}
+\newcommand{\cmdcall}{\texttt{call}\,}
+
+\newcommand{\tunit}{\texttt{unit}}
+\newcommand{\tint}{\texttt{int}}
+\newcommand{\tbool}{\texttt{bool}}
+\newcommand{\vtype}[1]{\textbf{V}[#1]}
+
+\newcommand{\pure}[1]{\text{PenCtx}(#1)}
+\newcommand{\wellf}[1]{\text{well\_formed}(#1)}
+
+\newcommand{\hred}{\rightarrow_h}
+\newcommand{\tred}{\rightarrow_t}
+\newcommand{\tpred}{\rightarrow_{tp}}
+\newcommand{\cred}{\text{red}}
+
+\newcommand{\wand}{-\mkern-8mu*\,}
+\newcommand{\upd}{\dot{|\mkern-8mu\Rrightarrow}\,}
+\newcommand{\later}{\triangleright}
+\newcommand{\wpre}[5]{\textsf{wp}\, #1\, \progspec{#2}\, \progspec{#3}\, \progspec{#4}\, \progspec{#5}}
+\newcommand{\htriple}[6]{\progspec{#1}\, #2\, \progspec{#3}\, \progspec{#4}\, \progspec{#5}\, \progspec{#6}}
+
+\newcommand{\sep}{\,|\,}
+
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+
+% \title{Draft of Iris with Control Flow}
+
+\begin{document}
+
+\section{The Programming Language}
+
+Below shows the syntax of the programming language we consider, which is an extension of the one in the original Iris paper.
+We also take Rust language as a reference in the design of the language.
+$$
+\begin{aligned}
+    v \in \textit{Val} ::=\, & () \sep z \sep \true \sep \false \sep l \sep \lambda x.e \sep \cdots \\
+    e \in \textit{Expr} ::=\, & v \sep x \sep e_1(e_2) \sep \cmdref(e) \sep !e \sep e_1 \leftarrow e_2 \sep \cmdfork{e} \sep e_1 \cmdseq e_2 \sep \cmdloop{e} e \\
+                        \sep\, & \cmdif e_1 \cmdthen e_2 \cmdelse e_3 \sep \cmdbreak e \sep \cmdcontinue \sep \cmdcall e \sep \cmdreturn e \sep \cdots \\
+    K \in \textit{Ctx} ::=\, & \bullet \sep K(e) \sep v(K) \sep \cmdref(K) \sep !K \sep K \leftarrow e \sep v \leftarrow K \sep K \cmdseq e \sep \cmdloop{e} K \\
+                        \sep\, & \cmdif K \cmdthen e_2 \cmdelse e_3 \sep \cmdbreak K \sep \cmdcall K \sep \cmdreturn K \sep \cdots
+\end{aligned}
+$$
+
+To allow context binding, we use $\cmdloop{e} e$ to represent a loop statement with $e$ as its loop body.
+$e$ serves as a parameter in the corresponding evaluation context for the loop command.
+After the completion of evaluation for expression in $K$, we can still recover the complete loop body from the subscription of $\cmdloop{e}\!$.
+We can wrap the conventional loop definition as $\texttt{loop}\, e \triangleq \cmdloop{e} e$.
+
+The $\cmdbreak\!$ statement and $\cmdcontinue$ statement are scoped by $\cmdloop{e}\!$ and can only manipulate the control flow within the loop.
+The sequence statement and if statement definitions are standard.
+
+We also consider control flow related to function invocations.
+To the resolve the problem of whether the $\cmdreturn\!$ statement can penetrate unnamed functions defined with the $\lambda$ operator (e.g. which one of 1 and 2 should $(\lambda x. \cmdreturn x)(1) \cmdseq 2$ evaluate to), we use $\cmdcall\!$ to scope the influence of $\cmdreturn\!$.
+We can still define recursive functions in lambda calculus with the $\cmdreturn\!$ functioning properly.
+
+Following is an example defining the factorial function, where we early return 1 when $n$ is 0 and follows it by an invocation to $f$ recursively. The expression $\cmdcall (\textit{FACT}(n))$ would return the value of $n!$.
+Removing $\cmdcall\!$ in this definition will cause the evaluation of $\textit{FACT}(n)$ always goes into $\cmdreturn 1$.
+$$
+\begin{aligned}
+    \textit{FACT}' &\triangleq \lambda f. \lambda n. (\cmdif n = 0 \cmdthen \cmdreturn 1) \cmdseq n \times (\cmdcall (f\, f\, (n - 1))) \\
+    \textit{FACT} &\triangleq \textit{FACT}'\,\textit{FACT}'
+\end{aligned}
+$$
+% \todo{Probabily an example}
+
+% $\cmdbreak\!$ and $\cmdcontinue$ can not penetrate $\cmdloop{e}\!$, and $\cmdreturn\!$ can not penetrate $\cmdcall\!$.
+% A problem, $(\lambda x. \cmdreturn x)(1) \cmdseq 3$ should evaluate to 1 or 3? In other words, whether the lambda expression is a function or a normal expression?
+
+\section{Operational Semantics}
+
+We then define the operational semantics of the language.
+% We mainly work on the head reduction ($\hred$), and the thread local reduction ($\tred$) and thread-pool reduction ($\tpred$) are identical to the original ones.
+
+\begin{figure}[h]
+$$
+\begin{aligned}
+    (\cmdloop{e} v, \sigma) &\hred (\cmdloop{e} e, \sigma, \epsilon) && \\
+    (\cmdloop{e} (\cmdcontinue), \sigma) &\hred (\cmdloop{e} e, \sigma, \epsilon) &&  \\
+    (\cmdloop{e} (\cmdbreak v), \sigma) &\hred (v, \sigma, \epsilon) && \\
+    (K[\cmdbreak v], \sigma) &\hred (\cmdbreak v, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\cmdbreak\!} \\
+    (K[\cmdcontinue], \sigma) &\hred (\cmdcontinue, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\cmdcontinue} \\
+\end{aligned}
+$$
+\caption{Head Reductions for Loop}
+\label{fig:hred-loop}
+\end{figure}
+
+Figure~\ref{fig:hred-loop} shows head reductions for $\cmdloop{e}\!$, $\cmdbreak\!$, and $\cmdcontinue$.
+\begin{itemize}
+\item The first two rules says that when the evaluation of the loop body finishes or it encounters a $\cmdcontinue$, it reset the expression in the hole to $e$, the complete loop body. We no longer require the body evaluate to unit, and such requirement can be met by definition $\texttt{loop}\, e \triangleq \cmdloop{e} (e ;; ())$.
+\item The third rule says when the loop encounters a $\cmdbreak\!$ in the hole, the evaluation for the entire loop finishes with the value carried by $\cmdbreak\!$ as its result.
+\item The last two rules says $\cmdbreak\!$ and $\cmdcontinue$ can terminate the reduction of their evaluation context $K$, if $K$ is their penetrable context $\text{PenCtx}$ defined as:
+$$
+\begin{aligned}
+    \pure{\cmdbreak\!} &\triangleq \textit{Cxt}\,\backslash\cmdloop{e}\!\backslash\cmdcall \\
+    \pure{\cmdcontinue} &\triangleq \textit{Cxt}\,\backslash\cmdloop{e}\!\backslash\cmdcall
+\end{aligned}
+$$
+where $\textit{Cxt}\,\backslash\cmdloop{e}\!\backslash\cmdcall\!$ represents the set of contexts without using the $\cmdloop{e}\!$ and $\cmdcall\!$ constructs.
+This limits effects of $\cmdbreak\!$ and $\cmdcontinue$ to stay within the loop body and function body.
+We forbid $K$ to be $\bullet$ to avoid infinite reductions.
+\end{itemize}
+
+\begin{figure}[h]
+$$
+\begin{aligned}
+    (\cmdcall v, \sigma) &\hred (v, \sigma, \epsilon) \\
+    (\cmdcall (\cmdreturn v), \sigma) &\hred (v, \sigma, \epsilon) \\
+    (K[\cmdreturn v], \sigma) &\hred (\cmdreturn v, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\cmdreturn\!}
+\end{aligned}
+$$
+\caption{Head Reductions for Function Invocation}
+\label{fig:hred-func}
+\end{figure}
+
+Figure~\ref{fig:hred-func} shows head reductions for $\cmdcall\!$ and $\cmdreturn\!$.
+\begin{itemize}
+\item The first two rules says that when the function body evaluates to a value or a $\cmdreturn\!$ statement, the entire function invocation statement evaluates to the corresponding value.
+\item Similar to $\cmdbreak\!$ and $\cmdcontinue$, $\cmdreturn\!$ can terminate the evaluation of its penetrable context:
+$$
+\pure{\cmdreturn\!} \triangleq \textit{Cxt}\,\backslash\cmdcall
+$$
+which limits $\cmdreturn\!$ to affect control flow within the innermost $\cmdcall\!$.
+\item The $\cmdreturn v$ itself can not reduce to $v$ outside a function invocation to allow the adequacy theorem hold for our weakest precondition definition, which seems reasonable if we consider any program consists of only an invocation to the main function.
+\end{itemize}
+
+\paragraph{Remark.} Notice that there are 4 types of terminals for an expression in the reduction: $v$, $\cmdbreak v$, $\cmdcontinue$, and $\cmdreturn v$.
+They cannot be further reduced and correspond to 4 different postconditions in the weakest precondition we defined later.
+$$
+\text{terminals} \triangleq \textit{Val} \cup \{\cmdbreak v, \cmdcontinue, \cmdreturn v \sep v \in \textit{Val}\}
+$$
+
+\begin{figure}[h]
+$$
+\begin{aligned}
+    (\cmdif \true \cmdthen e_2 \cmdelse e_3, \sigma) &\hred (e_2, \sigma, \epsilon) && \\
+    (\cmdif \false \cmdthen e_2 \cmdelse e_3, \sigma) &\hred (e_3, \sigma, \epsilon) && \\
+    (v \cmdseq e, \sigma) &\hred (e, \sigma, \epsilon) && \\
+    (\cmdfork{e}, \sigma) &\hred ((), \sigma, e) && \text{if $e$ is well-formed} \\
+    &\cdots
+\end{aligned}
+$$
+\caption{Head Reductions for Other Expressions}
+\label{fig:hred-other}
+\end{figure}
+
+Figure~\ref{fig:hred-other} shows the head reduction of the if statement, the sequence statement, and the fork statement.
+First three rules are standard, while the last one for fork is modified from the one in the original Iris paper, which requires the expression in the forked thread to be well-formed.
+\begin{definition}
+    An expression is well-formed if and only if every $\cmdbreak\!$ and $\cmdcontinue$ in it is scoped by a $\cmdloop{e}\!$ and every $\cmdreturn\!$ in it is scoped by a $\cmdcall\!$.    
+\end{definition}
+
+% $$
+% \begin{aligned}
+%     (\cmdloop{e} (), \sigma) &\hred (\cmdloop{e} e, \sigma, \epsilon) && \\
+%     (\cmdloop{e} (\cmdbreak v), \sigma) &\hred (v, \sigma, \epsilon) && \\
+%     (\cmdloop{e} (\cmdcontinue), \sigma) &\hred (\cmdloop{e} e, \sigma, \epsilon) &&  \\
+%     (K[\cmdbreak v], \sigma) &\hred (\cmdbreak v, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\cmdbreak\!} \\
+%     (K[\cmdcontinue], \sigma) &\hred (\cmdcontinue, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\cmdcontinue} \\
+%     (\cmdcall v, \sigma) &\hred (v, \sigma, \epsilon) \\
+%     (\cmdcall (\cmdreturn v), \sigma) &\hred (v, \sigma, \epsilon) \\
+%     (K[\cmdreturn v], \sigma) &\hred (\cmdreturn v, \sigma, \epsilon) && \text{if } K \neq \bullet \text{ and } K \in \pure{\cmdreturn\!} \\
+%     (\cmdif \true \cmdthen e_2 \cmdelse e_3, \sigma) &\hred (e_2, \sigma, \epsilon) && \\
+%     (\cmdif \false \cmdthen e_2 \cmdelse e_3, \sigma) &\hred (e_3, \sigma, \epsilon) && \\
+%     (v \cmdseq e, \sigma) &\hred (e, \sigma, \epsilon) && \\
+%     (\cmdfork{e}, \sigma) &\hred ((), \sigma, e) && \text{if } \wellf{e} \\
+%     &\cdots
+% \end{aligned}
+% $$
+
+% where
+% $$
+% \begin{aligned}
+%     \pure{\cmdbreak\!} &\triangleq \textit{Cxt}\,\backslash\cmdloop{e}\!\backslash\cmdcall \\
+%     % \{K \sep \forall K_1, K_2. \text{ if } K = K_1[K_2] \text{ then } K_1 \neq \cmdloop{e} K_2 \text{ and } K_2 \in \pure{\cmdbreak\!}\} \\
+%     \pure{\cmdcontinue} &\triangleq \textit{Cxt}\,\backslash\cmdloop{e}\!\backslash\cmdcall \\
+%     \pure{\cmdreturn\!} &\triangleq \textit{Cxt}\,\backslash\cmdcall \\
+%     % \{K \sep \forall K_1, K_2. \text{ if } K = K_1[K_2] \text{ then } K_1 \neq \cmdloop{e} K_2 \text{ and } K_2 \in \pure{\cmdcontinue}\} \\
+%     \wellf{e} &\text{ iff. } % TODO: definition of well-definedness
+%     \end{aligned}
+% $$
+
+% There is a small problem that the expression need to terminate after \cmdbreak{} and \cmdcontinue{}, otherwise the evaluation gets stuck.
+
+\section{Weakest Precondition and Proof Rules}
+
+We define the weakest precondition with multiple postconditions for different exit type as follows:
+$$
+\begin{aligned}
+    \wpre{e}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} \triangleq& \quad
+           (e \in \textit{Val} \land \upd \Phi_N(e)) \\
+    & \lor (\exists v \in \textit{Val}. e = \cmdbreak v \land \upd \Phi_B(v)) \\
+    & \lor (e = \cmdcontinue \land \upd \Phi_C()) \\
+    & \lor (\exists v \in \textit{Val}. e = \cmdreturn v \land \upd \Phi_R(v)) \\
+    & \lor \biggl(\forall \sigma. e \notin \text{terminals} \land S(\sigma) \wand \upd \bigl(\cred(e, \sigma) \\
+    & \quad \land \later
+        \forall e', \sigma', \vec{e}_f. \bigl((e, \sigma) \tred (e', \sigma', \vec{e}_f)\bigr) \wand \upd \\
+    & \quad\quad \bigl(S(\sigma') * \wpre{e'}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} * \varhexstar_{e'\in\vec{e}_f} \wpre{e'}{\top}{\top}{\top}{\top} \bigr)\bigr)\biggr)
+\end{aligned}
+$$
+
+There are 5 cases in total:
+\begin{itemize}
+\item \textbf{Normal exit:} If the expression has evaluated to a value, then $\Phi_N$ should hold.
+\item \textbf{Break exit:} If the expression has evaluated to $\cmdbreak\!$, then $\Phi_B$ should hold.
+\item \textbf{Continue exit:} If the expression has evaluated to $\cmdcontinue$, then $\Phi_C$ should hold.
+\item \textbf{Return exit:} If the expression has evaluated to $\cmdreturn\!$, then $\Phi_R$ should hold.
+\item \textbf{Preservation:} If the expression is a non-terminal, then for any program state, the expression is reducible, and after one step of reduction, the weakest precondition holds for the new expression and any forked thread can terminate normally (where the well-formedness come into effect).
+\end{itemize}
+
+% $$
+% \cred(e) \triangleq e \notin \textit{Val}\, \cup \{\cmdbreak v, \cmdcontinue, \cmdreturn v\}
+% $$
+
+% The adequacy theorem will have some problem w.r.t the \cmdreturn statement.
+
+\begin{figure}[h]
+    $$
+    \begin{aligned}
+        \Phi_B(v) &\vdash \wpre{\cmdbreak v}{\bot}{\Phi_B}{\bot}{\bot} & \textsc{(wp-break)} \\
+        \Phi_C() &\vdash \wpre{\cmdcontinue}{\bot}{\bot}{\Phi_C}{\bot} & \textsc{(wp-continue)} \\
+        \Phi_R(v) &\vdash \wpre{\cmdreturn v}{\bot}{\bot}{\bot}{\Phi_R} & \textsc{(wp-return)} \\
+        \Box(I \wand{}\, \wpre{e}{\_. I}{\Phi_B}{\_. I}{\Phi_R}) * I &\vdash \wpre{(\cmdloop{e}e)}{\Phi_B}{\bot}{\bot}{\Phi_R} & \textsc{(wp-loop)} \\
+        % \wpre{e}{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}}{\bot}{\bot} &\vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C} & \textsc{(wp-bind-normal)} \\
+        % K\in\pure{\cmdbreak\!} \land \wpre{e}{\bot}{\Phi_B}{\bot} &\vdash \wpre{K[e]}{\bot}{\Phi_B}{\bot} & \textsc{(wp-bind-break)} \\
+        \begin{aligned}
+            &(v = \true \wand \wpre{e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}) \\
+            \land &(v = \false \wand \wpre{e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R})
+        \end{aligned} &\vdash \wpre{\cmdif v \cmdthen e_2 \cmdelse e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-if)} \\
+        \begin{aligned}
+            \texttt{wp}\,e\,& \progspec{\_.\wpre{e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}} \\
+                            & \progspec{\Phi_B}\,\progspec{\Phi_C}\,\progspec{\Phi_R}
+        \end{aligned} &\vdash \wpre{e_1 \cmdseq e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-seq)} \\
+        \wpre{e}{\Phi}{\bot}{\bot}{\Phi} &\vdash \wpre{\cmdcall e}{\Phi}{\bot}{\bot}{\bot} & \textsc{(wp-call)} \\
+        \begin{aligned}
+            \texttt{wp}\,e\,& \progspec{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}} \\
+                            & \progspec{v. K \in \pure{\cmdbreak\!} \land \Phi_B(v)} \\
+                            & \progspec{v. K \in \pure{\cmdcontinue} \land \Phi_C(v)} \\
+                            & \progspec{v. K \in \pure{\cmdreturn\!} \land \Phi_R(v)}
+        \end{aligned} &\vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-bind)} \\
+        &\cdots
+    \end{aligned}
+    $$
+    \caption{Some Rules for Weakest Precondition}
+    \label{fig:wp-rules}
+\end{figure}
+
+Figure~\ref{fig:wp-rules} shows some rules derivable from our definition of the weakest precondition, which we have proved informally and should hold if formalized in Coq using Iris.
+We mainly demonstrate rules related to the control flow and binding.
+
+\begin{itemize}
+    \item The first three rules, \textsc{wp-break}, \textsc{wp-continue}, and \textsc{wp-return}, are rules for three primitives to manipulate control flow.
+    \item The \textsc{wp-loop} is the standard loop rule involving loop invariant.
+    The \textsc{wp-if} and \textsc{wp-seq} are also standard rules for if statement and sequence statement with multiple exit conditions.
+    \item The \textsc{wp-call} allows conversion from return postconditions to normal postconditions upon the completion of function invocation.
+    \item The most interesting rule is the \textsc{wp-bind} rule, which is the main obstacle in the previous effort to equip Iris with control flow.
+    In the weakest precondition of inner expression $e$, the normal postconditions is simply the weakest precondition for the remaining context $K$.
+    The postconditions for other exit kind is more interesting. Taking $\cmdbreak\!$ for example, the postcondition says the remaining context $K$ is penetrable by $\cmdbreak\!$ and the overall break condition $\Phi_B$ holds. \begin{itemize}
+        \item If $K$ is penetrable, then the $\cmdbreak\!$ inside $e$ can also break the control flow in $K$. Thus the break postconditions of $e$ and $K[e]$ should be the same.
+        \item If $K$ is impenetrable, then the $\cmdbreak\!$ inside $e$ is scoped by some $\cmdloop{e}\!$ in $K$. Therefore, we should forbid the break condition of $e$ to affect the break condition of $K[e]$ (which is determined by statements outside the $\cmdloop{e}\!$ in $K$) by evaluating $K \in \pure{\cmdbreak\!}$ and the entire break condition to $\bot$.
+        Consequently, the weakest precondition in the premise is invalidated (because $e$ actually has a break condition).
+        \item In the second case, to handle the break condition of $e$ properly, we should use \textsc{wp-bind} to bind the context outside the loop and apply \textsc{wp-loop} to the entire loop containing $e$.
+    \end{itemize}
+\end{itemize}
+
+% Return conditions should be merged with normal conditions upon calling the function.
+
+\section{Typing}
+
+We also think of the possible typing system of the language consisting of following primary types.
+$$
+\tau, A, B \in \textit{Type} ::= \tunit \sep \tint \sep \tbool \sep A \rightarrow B \sep \cdots
+$$
+With multiple evaluation terminals, we should type the result of all possible kinds of terminal for an expression.
+% The $\tau$ represents any type, and if some exit is impossible for an expression (e.g. normal exit for $\cmdbreak\!$), we should type the result of corresponding exit as $\tau$.
+% It has the following property, and we can always rewrite $\tau$ to any concrete type.
+% $$
+% \forall A \in \textit{Type}. \tau = A
+% $$
+
+\subsection{Syntactic Typing}
+
+We first define the notation for syntactic type as:
+$$
+    \Gamma \vdash e: A_N, A_B, A_C, A_R
+$$
+
+It states that given type assignment $\Gamma$, if the expression evaluates to a value, a break terminal, a continue terminal, or a return terminal, then types of the value or values carried by terminals are respectively $A_N$, $A_B$, $A_C$, and $A_R$.
+% the type of the normal, break, continue, and return exit results for expression $e$ are respective $A_N$, $A_B$, $A_C$, and $A_R$.
+If the expression evaluation will not reach some terminals, we can type corresponding values arbitrarily using a variable $\tau$.
+For example, $\Gamma \vdash \cmdbreak 1: \tau, \tint, \tau, \tau$ means that the break type of the expression is $\tint$, while other terminal types are arbitrary and we can set these types manually in favor of our proof.
+
+
+% If the type is $\tau$, then the expression evaluation will not terminate through the corresponding exit and we can type $\tau$ to any type.
+% In other words, we have the following rule for any type $A$.
+% \begin{mathpar}
+%     \inferrule*[left=$\tau$-normal]{
+%         \Gamma \vdash e: \tau, A_B, A_C, A_R
+%     }{
+%         \Gamma \vdash e: A, A_B, A_C, A_R
+%     }
+% \end{mathpar}
+% Similar rules hold for the break type, continue type, and return type.
+% In the construction of some typing proof tree, we can either select to convert $\tau$ to some other type to match the premise of other rules, or carry $\tau$ into types in the conclusion.
+
+\begin{figure}[h]
+    \begin{mathpar}
+        \inferrule*[left=type-break]{
+            \Gamma \vdash e: A_B, A_B, A_C, A_R
+        }{
+            \Gamma \vdash \cmdbreak e: \tau, A_B, A_C, A_R
+        }
+        \and
+        \inferrule*[left=type-continue]{}{
+            \Gamma \vdash \cmdcontinue: \tau, \tau, \tunit, \tau
+        }
+        \and
+        \inferrule*[left=type-return]{
+            \Gamma \vdash e: A_R, A_B, A_C, A_R
+        }{
+            \Gamma \vdash \cmdreturn e: \tau, A_B, A_C, A_R
+        }\\
+        \and
+        \inferrule*[left=type-loop]{
+            \Gamma \vdash e: \tunit, A_B, \tunit, A_R
+        }{
+            \Gamma \vdash \cmdloop{e} e: A_B, \tau, \tau, A_R
+        }
+        \and
+        \inferrule*[left=type-call]{
+            \Gamma \vdash e: A_R, \tau, \tau, A_R
+        }{
+            \Gamma \vdash \cmdcall e: A_R, \tau, \tau, \tau
+        }
+        \and
+        \inferrule*[left=type-seq]{
+            \Gamma \vdash e_1: A_N', A_B, A_C, A_R \and
+            \Gamma \vdash e_2: A_N, A_B, A_C, A_R
+        }{
+            \Gamma \vdash e_1 \cmdseq e_2: A_N, A_B, A_C, A_R
+        }
+        \and
+        \inferrule*[left=type-if]{
+            \Gamma \vdash e_1: \tbool, A_B, A_C, A_R \and
+            \Gamma \vdash e_2: A_N, A_B, A_C, A_R \and
+            \Gamma \vdash e_3: A_N, A_B, A_C, A_R
+        }{
+            \Gamma \vdash \cmdif e_1 \cmdthen e_2 \cmdelse e_3: A_N, A_B, A_C, A_R
+        }
+        \and
+        \inferrule*[left=type-apply]{
+            \Gamma \vdash e_1: A_N' \rightarrow (A_N, A_B, A_C, A_R) \and
+            \Gamma \vdash e_2: A_N', A_B, A_C, A_R
+        }{
+            \Gamma \vdash e_1(e_2): A_N, A_B, A_C, A_R
+        }
+    \end{mathpar} 
+    $$
+        \text{where } A \rightarrow (B_1, B_2, \cdots) \triangleq A \rightarrow B_1, A \rightarrow B_2, \cdots
+    $$
+    \caption{Some Typing Rules}
+    \label{fig:type-rule}
+\end{figure}
+
+Figure~\ref{fig:type-rule} shows some typing rules related to control flows and expression application.
+\begin{itemize}
+    \item First three rule types three new terminal expressions. Notice that we could have nested break/continue/return structures in $\cmdbreak\!$ and $\cmdreturn\!$ expressions. The continue type of any expression will always be $\tunit$ in this language, but we still use a variable $A_C$ to represent it in most cases.
+    \item In \textsc{type-loop} rule, The break type of the loop body is converted into the normal type of the loop. We require the normal type and continue type of the loop body to be $\tunit$, which is necessary in the Rust language.
+    \item In \textsc{type-call} rule, the normal type and return type of function body should agree. Also, the function body should have $\tau$ as its break type and continue type to guarantee well-formedness.
+    \item \textsc{type-seq} and \textsc{type-if} rules are straight forward, where break type, continue type, and return type of expressions should agree respectively.
+    \item The \textsc{type-apply} rule, in contrast to \textsc{type-call}, allow the control flow types ($A_C, A_B, A_R$) in the lambda term $e_1$ to be exposed after the application.
+\end{itemize}
+
+% $$
+% \begin{aligned}
+%     A + B &\triangleq \begin{cases}
+%         A & \text{if } B = \epsilon \text{ or } A = B \\
+%         B & \text{if } A = \epsilon \text{ or } A = B \\
+%         \text{undefined} & \text{otherwise}
+%     \end{cases} \\
+% \end{aligned}
+% $$
+
+\subsection{Semantic Typing}
+
+We can also do semantic typing for the language, and with the definition of weakest precondition, we can easily derive the following definition.
+$$
+\Gamma \vDash e: A_N, A_B, A_C, A_R \triangleq \Gamma \vDash \htriple{\text{True}}{e}{\vtype{A_N}}{\vtype{A_B}}{\vtype{A_C}}{\vtype{A_R}}
+$$
+This definition is quite informal with some notation abuse, but its meaning and some skipped notation definitions are similar to those in the Tutorial on Proving Semantic Type Soundness in Iris.
+
+\end{document}
