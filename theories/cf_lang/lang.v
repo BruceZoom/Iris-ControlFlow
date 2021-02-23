@@ -1928,6 +1928,11 @@ Proof.
     apply my_reducible_fill; auto.
 Qed.
 
+Lemma reducible_not_sval e σ:
+  reducible e σ -> to_sval e = None.
+Proof.
+Admitted.
+
 (* (** The following lemma is not provable using the axioms of [ectxi_language].
 The proof requires a case analysis over context items ([destruct i] on the
 last line), which in all cases yields a non-value. To prove this lemma for
