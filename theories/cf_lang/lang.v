@@ -1928,10 +1928,63 @@ Proof.
     apply my_reducible_fill; auto.
 Qed.
 
+Lemma head_step_not_sval e1 σ1 κ e2 σ2 efs:
+  head_step e1 σ1 κ e2 σ2 efs -> to_sval e1 = None.
+Proof.
+  inversion 1; subst; simpl in *; auto.
+  destruct (to_sval (fill K e2)) eqn:eq; auto.
+  destruct s; simpl in eq.
+  + destruct_inversion (fill K e2) eq;
+    [exfalso | destruct_inversion e eq | destruct_inversion e eq].
+    inversion H; subst; simpl in *.
+    destruct_inversion K0 H3. inversion H4.
+  + destruct_inversion (fill K e2) eq; destruct_inversion e eq.
+    inversion H; subst; simpl in *.
+    unfold expr_depth.singleton_ectx in H6.
+    destruct_inversion K0 H3; simpl in *; try congruence.
+    destruct_inversion K0 H9. inversion H5.
+  + destruct_inversion (fill K e2) eq;
+    [destruct_inversion e eq | | destruct_inversion e eq].
+    inversion H; subst; simpl in *.
+    unfold expr_depth.singleton_ectx in H5.
+    destruct_inversion K0 H3; simpl in *; try congruence.
+  + destruct_inversion (fill K e2) eq; destruct_inversion e eq.
+    inversion H; subst; simpl in *.
+    unfold expr_depth.singleton_ectx in H6.
+    destruct_inversion K0 H3; simpl in *; try congruence.
+    destruct_inversion K0 H9. inversion H5.
+Qed.
+
+Ltac sval_head_step_inv H :=
+    apply head_step_not_sval in H; inversion H.
+
 Lemma reducible_not_sval e σ:
   reducible e σ -> to_sval e = None.
 Proof.
-Admitted.
+  intros.
+  destruct (to_sval e) eqn:eq; [exfalso | auto].
+  destruct s, e; inversion eq; try (destruct e; inversion H1).
+  + destruct H as (? & ? & ? & ? & H).
+    inversion H.
+    destruct_inversion K H0.
+    sval_head_step_inv H3.
+  + destruct H as (? & ? & ? & ? & H).
+    inversion H.
+    destruct_inversion K H0.
+    - sval_head_step_inv H4.
+    - destruct_inversion K H6.
+      sval_head_step_inv H4.
+  + destruct H as (? & ? & ? & ? & H).
+    inversion H.
+    destruct_inversion K H0.
+    sval_head_step_inv H2.
+  + destruct H as (? & ? & ? & ? & H).
+    inversion H.
+    destruct_inversion K H0.
+    - sval_head_step_inv H4.
+    - destruct_inversion K H6.
+      sval_head_step_inv H4.
+Qed.
 
 (* (** The following lemma is not provable using the axioms of [ectxi_language].
 The proof requires a case analysis over context items ([destruct i] on the

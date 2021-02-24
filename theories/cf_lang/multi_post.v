@@ -1150,7 +1150,7 @@ Lemma wp_lift_pure_step_no_fork E' e1 φn φb φc φr:
   ⊢ WP e1 {{ φn }} {{ φb }} {{ φc }} {{ φr }}.
 Proof.
   iIntros (Hsafe Hstep) "H". iApply wp_lift_step.
-  { admit. }
+  { specialize (Hsafe inhabitant). eauto using reducible_not_val. }
   iIntros (σ1 κ κs) "Hσ". iMod "H".
   iMod fupd_intro_mask' as "Hclose"; last iModIntro; first by set_solver. iSplit.
   { iPureIntro. auto. }
@@ -1159,7 +1159,7 @@ Proof.
   destruct (Hstep κ σ1 e2 σ2 efs) as (-> & <- & ->); auto.
   iMod "Hclose" as "_". iMod "H". iModIntro.
   iDestruct ("H" with "[//]") as "H". simpl. iFrame.
-Admitted.
+Qed.
 
 Lemma wp_lift_pure_det_step_no_fork E' e1 e2 φn φb φc φr:
   (forall σ1, reducible e1 σ1) →
@@ -1310,39 +1310,46 @@ Proof.
     }
     iApply wp_pure_step_later; auto.
   }
-  {
-    rewrite wp_unfold /wp_pre; simpl.
-    rewrite wp_unfold /wp_pre; simpl.
+  1, 2, 3:
+    rewrite wp_unfold /wp_pre; simpl;
+    rewrite wp_unfold /wp_pre; simpl;
 
-    unfold fupd.
-    unfold bi_fupd_fupd. simpl.
-    unfold uPred_fupd.
-    rewrite seal_eq.
-    unfold uPred_fupd_def.
+    unfold fupd;
+    unfold bi_fupd_fupd; simpl;
+    unfold uPred_fupd;
+    rewrite seal_eq;
+    unfold uPred_fupd_def;
 
-    iIntros (σ1 κ κs _) "Hs Hw".
-    iSpecialize ("H" with "Hw").
+    iIntros (σ1 κ κs _) "Hs Hw";
+    iSpecialize ("H" with "Hw");
 
-    repeat iMod "H".
-    iDestruct "H" as "[Hw [Htop H]]".
-    iApply except_0_bupd.
-    iModIntro.
+    repeat iMod "H";
+    iDestruct "H" as "[Hw [Htop H]]";
+    iApply except_0_bupd;
+    iModIntro;
     
-    iApply bupd_frame_l.
-    iFrame "Hw".
-    iApply bupd_frame_r.
-    iPoseProof ownE_empty as "Hown_phi".
+    iApply bupd_frame_l;
+    iFrame "Hw";
+    iApply bupd_frame_r;
+    iPoseProof ownE_empty as "Hown_phi";
     iFrame "Hown_phi".
 
+  {
     iSplitR.
     {
       iPureIntro.
-      admit.
-      (* exists nil, (App (Val $ RecV BAnon BAnon e2) (Val v)), σ1, nil.
-      apply Ectx_step with (AppLCtx EmptyCtx v) (Rec BAnon BAnon e2) (Val $ RecV BAnon BAnon e2); auto.
-      constructor. *)
+      exists nil, (EBreak v), σ1, nil.
+      pose proof Ectx_step.
+      apply (Ectx_step _ _ _ _ _ _ EmptyCtx (fill (AppRCtx (Rec BAnon BAnon e2) EmptyCtx) (EBreak v)) (EBreak v)); auto.
+      constructor.
+      - apply break_is_cft.
+      - unfold expr_depth.singleton_ectx. auto.
+      - unfold not; inversion 1; subst; simpl in *.
+        destruct_inversion K' H1; try congruence.
+        destruct_inversion K' H6.
+        inversion H4; subst; simpl in *.
+        destruct_inversion K' H5; simpl in *; try congruence.
     }
-
     iIntros (e0 σ2 efs H) "[Hw Hphi]".
     repeat iModIntro.
     iFrame "Hw". iFrame "Hphi".
@@ -1352,7 +1359,17 @@ Proof.
 
     assert (σ1 = σ2 /\ κ = [] /\ efs = [] /\ e0 = EBreak (Val v)) as [? [? [? ?]]]; subst.
     {
-      admit.
+      inversion H; subst; simpl in *.
+      destruct_inversion K H0.
+      + inversion H2; subst; simpl in *.
+        unfold expr_depth.singleton_ectx in H4.
+        destruct_inversion K H0; simpl in *; try congruence.
+        destruct_inversion K H8; auto.
+        destruct_inversion K H7. inversion H3.
+      + destruct_inversion K H4.
+        - sval_head_step_inv H2.
+        - destruct_inversion K H3.
+          sval_head_step_inv H2.
     }
 
     iFrame.
@@ -1361,7 +1378,145 @@ Proof.
     rewrite wp_unfold /wp_pre; simpl.
     auto.
   }
-Admitted.
+
+  {
+      iSplitR.
+      {
+        iPureIntro.
+        exists nil, EContinue, σ1, nil.
+        pose proof Ectx_step.
+        apply (Ectx_step _ _ _ _ _ _ EmptyCtx (fill (AppRCtx (Rec BAnon BAnon e2) EmptyCtx) EContinue) EContinue); auto.
+        constructor.
+        - apply continue_is_cft.
+        - unfold expr_depth.singleton_ectx. auto.
+        - unfold not; inversion 1; subst; simpl in *.
+          destruct_inversion K' H1; try congruence.
+          destruct_inversion K' H6.
+          inversion H4; subst; simpl in *.
+          destruct_inversion K' H5; simpl in *; try congruence.
+      }
+      iIntros (e0 σ2 efs H) "[Hw Hphi]".
+      repeat iModIntro.
+      iFrame "Hw". iFrame "Hphi".
+      iIntros "!# [Hw Hphi]".
+      repeat iModIntro.
+      iFrame "Hw". iFrame "Htop".
+
+    assert (σ1 = σ2 /\ κ = [] /\ efs = [] /\ e0 = EContinue) as [? [? [? ?]]]; subst.
+    {
+      inversion H; subst; simpl in *.
+      destruct_inversion K H0.
+      + inversion H2; subst; simpl in *.
+        unfold expr_depth.singleton_ectx in H4.
+        destruct_inversion K H0; simpl in *; try congruence.
+        destruct_inversion K H8; auto.
+      + destruct_inversion K H4.
+        sval_head_step_inv H2.
+    }
+
+    iFrame.
+    iSplitL; auto.
+
+    rewrite wp_unfold /wp_pre; simpl.
+    auto.
+  }
+
+  {
+    iSplitR.
+    {
+      iPureIntro.
+      exists nil, (EReturn v), σ1, nil.
+      pose proof Ectx_step.
+      apply (Ectx_step _ _ _ _ _ _ EmptyCtx (fill (AppRCtx (Rec BAnon BAnon e2) EmptyCtx) (EReturn v)) (EReturn v)); auto.
+      constructor.
+      - apply return_is_cft.
+      - unfold expr_depth.singleton_ectx. auto.
+      - unfold not; inversion 1; subst; simpl in *.
+        destruct_inversion K' H1; try congruence.
+        destruct_inversion K' H6.
+        inversion H4; subst; simpl in *.
+        destruct_inversion K' H5; simpl in *; try congruence.
+    }
+    iIntros (e0 σ2 efs H) "[Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Hphi".
+    iIntros "!# [Hw Hphi]".
+    repeat iModIntro.
+    iFrame "Hw". iFrame "Htop".
+
+    assert (σ1 = σ2 /\ κ = [] /\ efs = [] /\ e0 = EReturn (Val v)) as [? [? [? ?]]]; subst.
+    {
+      inversion H; subst; simpl in *.
+      destruct_inversion K H0.
+      + inversion H2; subst; simpl in *.
+        unfold expr_depth.singleton_ectx in H4.
+        destruct_inversion K H0; simpl in *; try congruence.
+        destruct_inversion K H8; auto.
+        destruct_inversion K H7. inversion H3.
+      + destruct_inversion K H4.
+        - sval_head_step_inv H2.
+        - destruct_inversion K H3.
+          sval_head_step_inv H2.
+    }
+
+    iFrame.
+    iSplitL; auto.
+
+    rewrite wp_unfold /wp_pre; simpl.
+    auto.
+  }
+Qed.
+
+Lemma seq_pure_exec (v : val) e2:
+  PureExec True 2 (v;; e2) e2.
+Proof.
+  unfold PureExec.
+  intros _.
+  eapply relations.nsteps_l with ((λ: <>, e2)%V v).
+  {
+    apply Build_pure_step.
+    + intros. unfold reducible_no_obs.
+      exists ((λ: <>, e2)%V v), σ1, nil.
+      apply (Ectx_step _ _ _ _ _ _ (AppLCtx EmptyCtx v) (Rec BAnon BAnon e2) (RecV BAnon BAnon e2)); auto.
+      constructor.
+    + intros.
+      inversion H; subst; simpl in *.
+      destruct_inversion K H0; simpl in *.
+      - inversion H2; subst; simpl in *.
+        unfold expr_depth.singleton_ectx in H4.
+        destruct_inversion K H0; simpl in *; try congruence.
+        * destruct_inversion K H7. inversion H3.
+        * destruct_inversion K H8; inversion H3.
+      - destruct_inversion K H0.
+        inversion H2; subst; simpl in *; auto.
+        unfold expr_depth.singleton_ectx in H5.
+        destruct_inversion K H1; simpl in *; try congruence.
+      - destruct_inversion K H4.
+        sval_head_step_inv H2.
+  }
+  eapply relations.nsteps_l; [| apply relations.nsteps_O].
+  {
+    apply Build_pure_step.
+    + intros. unfold reducible_no_obs.
+      exists e2, σ1, nil.
+      apply (Ectx_step _ _ _ _ _ _ EmptyCtx ((λ: <>, e2)%V v) e2); auto.
+      constructor. auto.
+    + intros.
+      inversion H; subst; simpl in *.
+      destruct_inversion K H0; simpl in *.
+      - inversion H2; subst; simpl in *; auto.
+        unfold expr_depth.singleton_ectx in H4.
+        destruct_inversion K H0; simpl in *; try congruence.
+        * destruct_inversion K H7. inversion H3.
+        * destruct_inversion K H8; inversion H3.
+      - destruct_inversion K H0.
+        inversion H2; subst; simpl in *; auto.
+        unfold expr_depth.singleton_ectx in H5.
+        destruct_inversion K H1; simpl in *; try congruence.
+      - destruct_inversion K H4.
+        sval_head_step_inv H2.
+  }
+Qed.
 
 Lemma tac_wp_seq e1 e2 φn φb φc φr:
   WP e1 {{ λ v, ▷ ▷ WP e2 {{ φn }} {{ φb }} {{ φc }} {{ φr }} }} {{ φb }} {{ φc }} {{ φr }} ⊢
@@ -1378,19 +1533,10 @@ Proof.
     iApply (tac_wp_consequence with "H").
     {
       iIntros (?) "H".
-      assert (PureExec True 2 (v;; e2) e2).
-      {
-        unfold PureExec.
-        intros _.
-        Print relations.nsteps.
-        eapply relations.nsteps_l with ((λ: <>, e2)%V v); [admit |].
-        eapply relations.nsteps_l; [admit | apply relations.nsteps_O].
-      }
-      simpl.
-      pose proof wp_pure_step_later.
+      pose proof seq_pure_exec v e2. simpl.
       pose proof wp_pure_step_later (v;; e2) e2 _ 2 φn φb φc φr H.
-      simpl in H1.
-      iApply H1; auto.
+      simpl in H0.
+      iApply H0; auto.
     }
     {
       simpl.
@@ -1429,8 +1575,7 @@ Proof.
       destruct_inversion K' H4; simpl in H5; congruence.
     }
   }
-Admitted.
-
+Qed.
 
 Section strong_no_continue.
   Import NoContinueHeadPreserve.
@@ -1664,3 +1809,15 @@ Proof.
   iApply "Hφ".
   iApply "Hl".
 Qed.
+
+Print Assumptions tac_wp_break.
+Print Assumptions tac_wp_continue.
+Print Assumptions tac_wp_return.
+Print Assumptions tac_wp_bind.
+Print Assumptions tac_wp_loop.
+Print Assumptions tac_wp_call.
+Print Assumptions tac_wp_consequence.
+Print Assumptions tac_wp_seq.
+Print Assumptions wp_no_continue.
+
+End multi_post.
