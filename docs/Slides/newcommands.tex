@@ -1,0 +1,94 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% common
+\newcommand{\doublebrackets}[1]{[\![ #1 ]\!]}
+\newcommand{\progspec}[1]{\{ #1 \}}
+\newcommand{\tuple}[1]{\langle #1 \rangle}
+\newcommand{\sep}{ ~|~ }
+\newcommand{\triple}[3]{\progspec{ #1 } #2 \progspec{ #3 }}
+\newcommand{\cross}{\diagdown\mkern-16mu\diagup}
+% \newcommand{\cross}{$\bigtimes$}
+% \newcommand{\VDash}{\shortparallel\mkern-8mu\vDash}
+\DeclareRobustCommand{\VDash}{\mathrel{||}\joinrel\Relbar}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% iris cf lang
+\newcommand{\true}{\texttt{true}}
+\newcommand{\false}{\texttt{false}}
+\newcommand{\cmdref}{\texttt{ref}}
+\newcommand{\cmdfork}[1]{\texttt{fork}\{#1\}}
+\newcommand{\cmdloop}[1]{\texttt{loop}_{#1}\,}
+\newcommand{\cmdbreak}{\texttt{break}\,}
+\newcommand{\cmdcontinue}{\texttt{continue}}
+\newcommand{\cmdif}{\texttt{if}\,}
+\newcommand{\cmdthen}{\,\texttt{then}\,}
+\newcommand{\cmdelse}{\,\texttt{else}\,}
+\newcommand{\cmdseq}{\,;;\,}
+\newcommand{\cmdreturn}{\texttt{return}\,}
+\newcommand{\cmdcall}{\texttt{call}\,}
+
+\newcommand{\tunit}{\texttt{unit}}
+\newcommand{\tint}{\texttt{int}}
+\newcommand{\tbool}{\texttt{bool}}
+\newcommand{\vtype}[1]{\textbf{V}[#1]}
+
+\newcommand{\pure}[1]{\text{PenCtx}(#1)}
+\newcommand{\wellf}[1]{\text{well\_formed}(#1)}
+
+\newcommand{\hred}{\rightarrow_h}
+\newcommand{\tred}{\rightarrow_t}
+\newcommand{\tpred}{\rightarrow_{tp}}
+\newcommand{\cred}{\text{red}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% iris logic
+\newcommand{\largeast}{\,|\mkern-10mu\diagdown\mkern-16mu\diagup}
+\newcommand{\WP}{\textsf{WP}}
+\newcommand{\wand}{-\mkern-8mu*\,}
+\newcommand{\upd}{\dot{|\mkern-8mu\Rrightarrow}\,}
+\newcommand{\later}{\triangleright}
+\newcommand{\wpre}[5]{\WP\, #1\, \progspec{#2, [#3, #4, #5]}}
+\newcommand{\htriple}[6]{\progspec{#1}\, #2\, \progspec{#3}\, \progspec{#4}\, \progspec{#5}\, \progspec{#6}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% toy lang
+\newcommand{\cdealloc}[1]{[#1]}
+\newcommand{\cseq}{;;}
+\newcommand{\cif}[3]{\texttt{if}~#1~\texttt{then}~#2~\texttt{else}~#3}
+\newcommand{\cfor}[2]{\texttt{for}(;;#2)~#1}
+\newcommand{\cbreak}{\texttt{break}}
+\newcommand{\ccontinue}{\texttt{continue}}
+\newcommand{\creturn}{\texttt{return}}
+\newcommand{\cskip}{\texttt{skip}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% big step
+\newcommand{\bigvalid}{\vDash_\mathrm{b}}
+\newcommand{\exitkind}{\mathrm{exit\_kind}}
+\newcommand{\ek}{\mathrm{ek}}
+\newcommand{\ekb}{\mathrm{brk}}
+\newcommand{\ekc}{\mathrm{con}}
+\newcommand{\ekr}{\mathrm{ret}}
+\newcommand{\bigstep}[4]{(#1, #2) \Downarrow (#3, #4)}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% continuation
+\newcommand{\guard}[2]{\mathrm{guard}(#1, #2)}
+\newcommand{\kloop}[2]{\mathrm{KLoop}(#1, #2)}
+\newcommand{\kloops}[3]{\mathrm{KLoop}_{#3}(#1, #2)}
+\newcommand{\kseq}[1]{\mathrm{KSeq}(#1)}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% utility
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\figref}[1]{Fig.~\ref{#1}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newtheorem{thm}{Theorem}
+\newtheorem{defn}[thm]{Definition} 
+\newtheorem{lem}[thm]{Lemma}

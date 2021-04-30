@@ -1,0 +1,491 @@
+\documentclass[10pt]{beamer}
+
+\usetheme{metropolis}
+% \usecolortheme{beaver}
+% \usecolortheme{whale}
+
+\usepackage{appendixnumberbeamer}
+
+\usepackage{booktabs}
+\usepackage[scale=2]{ccicons}
+
+\usepackage{pgfplots}
+\usepgfplotslibrary{dateplot}
+
+\usepackage{xspace}
+\newcommand{\themename}{\textbf{\textsc{metropolis}}\xspace}
+
+
+\input{usepackages.tex}
+\input{newcommands.tex}
+
+\newcommand{\blue}[1]{{\color[rgb]{0, 0, 1} #1}}
+
+
+\title{Iris-CF}
+\subtitle{Iris Program Logic for Control Flow}
+\date{\today}
+\author{Wang Zhongye}
+% \institute{Center for modern beamer themes}
+% \titlegraphic{\hfill\includegraphics[height=1.5cm]{logo.pdf}}
+
+\begin{document}
+
+\maketitle
+
+\begin{frame}{Table of contents}
+  \setbeamertemplate{section in toc}[sections numbered]
+  \tableofcontents[hideallsubsections]
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}
+\frametitle{What is Iris?}
+
+\
+
+Iris \cite{jung2017iris} is a Higher-Order Concurrent Separation Logic Framework,
+implemented and verified in the Coq proof assistant.
+
+\
+
+\input{fig/iris.tex}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Why Iris-CF?}
+
+Iris does not support reasoning about control flows very well.
+
+\
+
+One possible way to enable this is through continuation \cite{timany2019mechanized}, i.e., use try-catch style control flow.
+
+
+\
+
+\onslide<2->{
+Our approach is like the multi-post-condition judgement in VST \cite{VST,VST-Floyd}.
+\begin{mathpar}
+  \inferrule[Seq]{
+    \vdash \triple{P}{e_1}{R, [R_\ekb, R_\ekc, R_\ekr]} \and
+    \vdash \triple{R}{e_2}{Q, [R_\ekb, R_\ekc, R_\ekr]}
+  }{
+    \vdash \triple{P}{e_1 \cmdseq e_2}{Q, [R_\ekb, R_\ekc, R_\ekr]}
+  }
+\end{mathpar}
+}
+
+% \begin{figure}[h]
+% $
+% (\cmdif x == 1 \cmdthen \cmdcontinue) \cmdseq e
+% $
+
+% $\Downarrow$
+
+% $
+% \Big(\cmdif x == 1 \cmdthen \text{\blue{throw} $()$ \blue{to} } (\cmdif x == 1 \cmdthen \cdots) \cmdseq e\Big) \cmdseq e
+% $
+% \end{figure}
+
+\end{frame}
+
+\section{Programming Language}
+
+\begin{frame}
+\frametitle{Values}
+
+$$
+v \in \textit{Val} ::=\, () \sep z \sep \true \sep \false \sep l \sep \lambda x.e \sep \cdots
+$$
+
+\end{frame}
+
+\begin{frame}
+
+\only<1,2,5,6>{
+\frametitle{Expressions}
+$$
+\begin{aligned}
+    e \in \textit{Expr} ::=\, & v \sep x \sep e_1(e_2) \\
+    \sep\, & \cmdref(e) \sep !e \sep e_1 \leftarrow e_2 \\
+    \sep\, & \cmdfork{e} \sep e_1 \cmdseq e_2 \sep \cmdif e_1 \cmdthen e_2 \cmdelse e_3 \\
+    \onslide<2->{\sep\, & \blue{\cmdloop{e} e \sep \cmdbreak e \sep \cmdcontinue} \\}
+    \onslide<5->{\sep\, & \blue{\cmdcall e \sep \cmdreturn e} \sep \cdots \\}
+\end{aligned}
+$$
+\only<6>{
+$$
+\begin{aligned}
+    \textit{FACT}' &\triangleq \lambda f. \lambda n. (\cmdif n = 0 \cmdthen \cmdreturn 1) \cmdseq n \times (\cmdcall (f\, f\, (n - 1))) \\
+    \textit{FACT} &\triangleq \textit{FACT}'\,\textit{FACT}'
+\end{aligned}
+$$
+}
+
+}
+
+\only<3,4>{
+\frametitle{Evaluation Context}
+$$
+\begin{aligned}
+    K \in \textit{Ctx} ::=\, & [] \sep K(e) \sep v(K) \\
+    \sep\, & \cmdref(K) \sep !K \sep K \leftarrow e \sep v \leftarrow K \\
+    \sep\, & K \cmdseq e \sep \cmdif K \cmdthen e_2 \cmdelse e_3 \\
+    \sep\, & \blue{\cmdloop{e} K \sep \cmdbreak K} \sep \cdots
+\end{aligned}
+$$
+
+\onslide<4>{
+$$
+\begin{aligned}
+  \cmdloop{e} e = \cmdloop{e}[&e] && \rightarrow & \cmdloop{e}[&e'] = \cmdloop{e} e' \\
+  &e  && \rightarrow & &e'
+\end{aligned}
+$$
+}
+}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Evaluation Context}
+
+$$
+\begin{aligned}
+    K \in \textit{Ctx} ::=\, & [] \sep K(e) \sep v(K) \\
+    \sep\, & \cmdref(K) \sep !K \sep K \leftarrow e \sep v \leftarrow K \\
+    \sep\, & K \cmdseq e \sep \cmdif K \cmdthen e_2 \cmdelse e_3 \\
+    \sep\, & \blue{\cmdloop{e} K \sep \cmdbreak K \sep \cmdcall K \sep \cmdreturn K} \sep \cdots
+\end{aligned}
+$$
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Small Step Semantics}
+
+$$
+\begin{array}{c}  
+(e, \sigma) \hred (e', \sigma', \vec{e}_f) \\
+\text{where $\sigma, \sigma' \in \mathrm{state}$ and $\vec{e}_f \in \mathrm{list} \textit{ Expr}$}
+\end{array}
+$$
+
+\begin{mathpar}
+  \inferrule*[]{
+    (e, \sigma) \hred (e', \sigma', \vec{e}_f)
+  }{
+    (K[e], \sigma) \tred (K[e'], \sigma', \vec{e}_f)
+  }
+\end{mathpar}
+$$
+\text{Here $\tred$ is thread local reduction.}
+$$
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Small Step Semantics: Loop}
+
+$$
+\begin{aligned}
+    (\cmdloop{e} v, \sigma) &\hred (\cmdloop{e} e, \sigma, \epsilon) && \\
+    (\cmdloop{e} (\cmdcontinue), \sigma) &\hred (\cmdloop{e} e, \sigma, \epsilon) &&  \\
+    \onslide<2->{(\cmdloop{e} (\cmdbreak v), \sigma) &\hred (v, \sigma, \epsilon) && \\}
+    \onslide<3->{
+    (K[\cmdbreak v], \sigma) &\hred (\cmdbreak v, \sigma, \epsilon) && \text{if } K \in \pure{\cmdbreak\!} \\
+    (K[\cmdcontinue], \sigma) &\hred (\cmdcontinue, \sigma, \epsilon) && \text{if } K \in \pure{\cmdcontinue}
+    }
+\end{aligned}
+$$
+\onslide<3->{
+$$
+\begin{aligned}
+  \text{where } \pure{\cmdbreak\!} &= \pure{\cmdcontinue}\\
+  &\triangleq \textit{Ctx}^1\backslash\cmdloop{e}[]\backslash\cmdcall[]
+\end{aligned}
+$$
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Small Step Semantics: Call}
+
+$$
+\begin{aligned}
+    (\cmdcall v, \sigma) &\hred (v, \sigma, \epsilon) \\
+    (\cmdcall (\cmdreturn v), \sigma) &\hred (v, \sigma, \epsilon) \\
+    (K[\cmdreturn v], \sigma) &\hred (\cmdreturn v, \sigma, \epsilon) && \text{if } K \in \pure{\cmdreturn\!}
+\end{aligned}
+$$
+$$
+\begin{aligned}
+  \text{where } \pure{\cmdreturn\!} \triangleq \textit{Ctx}^1\backslash\cmdcall[]
+\end{aligned}
+$$
+
+\end{frame}
+
+\section{Program Logic: Iris}
+
+\begin{frame}
+\frametitle{Weakest Precondition (Iris)}
+
+\only<1,2>{
+$$
+\triple{P}{e}{v.\, Q(v)}
+$$
+$$
+\Updownarrow
+$$
+$$
+\only<1>{P \Rightarrow \WP\, e \{v.\, Q(v)\}}
+\only<2>{\Box (P \wand \WP\, e \{v.\, Q(v)\})}
+$$
+}
+
+\only<3>{
+$$
+\begin{aligned}
+  \sigma \vDash \WP\, e \{\Phi\} &\text{ iff. } (e \in \textit{Val} \land \sigma \vDash \Phi(e))\\
+  &\,\,\lor \bigg(e \notin \textit{Val} \land \mathrm{reducible}(e, \sigma) \\
+  &\,\,\quad \land \forall e_2, \sigma_2.\, \big((e, \sigma) \tred (e_2, \sigma_2, \epsilon)\big) \Rightarrow \sigma_2 \vDash \WP\, e_2 \{\Phi\} \bigg)
+\end{aligned}
+$$
+}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Proof in Iris}
+
+\begin{mathpar}
+  \inferrule*[]{
+    \onslide<2->{
+      \inferrule*[]{
+        \onslide<3->{ \blue{P \vdash \WP\,e\{\Phi'\}} }\\\\
+        \onslide<3->{ \Phi'(v) \vdash \WP\,K[v]\{\Phi\} }
+      % }
+    }{
+      \onslide<2->{P \vdash \WP\,e\{v.\,\WP\,K[v]\{\Phi\}\}}
+    }
+    }
+    ~~
+    \onslide<2->{\blue{\WP\,e\{v.\WP\, K[v] \{\Phi\}\} \vdash \WP\,K[e]\{\Phi\}}}
+  }{
+    P \vdash \WP\,K[e]\{\Phi\}
+  }
+\end{mathpar}
+
+\end{frame}
+
+
+\section{Program Logic: Iris-CF}
+
+\begin{frame}
+\frametitle{Weakest Precondition (Iris-CF)}
+
+$$
+\begin{aligned}
+    \sigma \vDash \wpre{e}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} &\text{ iff. }
+           (e \in \textit{Val} \land \sigma \vDash \Phi_N(e)) \\
+    & \lor \blue{(\exists v \in \textit{Val}.\, e = \cmdbreak v \land \sigma \vDash \Phi_B(v))} \\
+    & \lor \blue{(e = \cmdcontinue \land \sigma \vDash \Phi_C())} \\
+    & \lor \blue{(\exists v \in \textit{Val}.\, e = \cmdreturn v \land \sigma \vDash \Phi_R(v))} \\
+    & \lor \biggl(e \notin \text{terminals} \land \cred(e, \sigma) \\
+    & \quad \land \forall e', \sigma'. \bigl((e, \sigma) \tred (e', \sigma', \epsilon)\bigr) \Rightarrow \\
+    & \quad\quad \sigma' \vDash \wpre{e'}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} \biggr)
+\end{aligned}
+$$
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Proof Rules: Basics}
+
+$$
+  \begin{aligned}
+      \vdash \triple{\Phi_B(v)}{&\cmdbreak v}{{\bot},[{\Phi_B},{\bot},{\bot}]} \\
+      \vdash \triple{\Phi_C()}{&\cmdcontinue}{{\bot},[{\bot},{\Phi_C},{\bot}]} \\
+      \vdash \triple{\Phi_R(v)}{&\cmdreturn v}{{\bot},[{\bot},{\bot},{\Phi_R}]}
+  \end{aligned}
+$$
+$$
+\Downarrow
+$$
+$$
+  \begin{aligned}
+    \Phi_B(v) &\vdash \wpre{\cmdbreak v}{\bot}{\Phi_B}{\bot}{\bot} \\
+    \Phi_C() &\vdash \wpre{\cmdcontinue}{\bot}{\bot}{\Phi_C}{\bot} \\
+    \Phi_R(v) &\vdash \wpre{\cmdreturn v}{\bot}{\bot}{\bot}{\Phi_R}
+  \end{aligned}
+$$
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Proof Rules: Loop \& Call}
+
+\begin{mathpar}
+  \inferrule*[]{
+    \vdash \triple{I}{e}{I,[\Phi_B,I,\Phi_R]}
+  }{
+    \vdash \triple{I}{(\cfor{e}{})}{\Phi_B, [\bot, \bot, \Phi_R]}
+  }
+\end{mathpar}
+$$
+\onslide<2->{
+\Downarrow
+}
+$$
+$$
+\onslide<2->{
+  \begin{aligned}
+      \Box(I \wand{}\, \wpre{e}{\_. I}{\Phi_B}{\_. I}{\Phi_R}) * I &\vdash \wpre{(\cmdloop{e}e)}{\Phi_B}{\bot}{\bot}{\Phi_R}
+  \end{aligned}
+}
+$$
+
+
+\onslide<3->
+$$
+\wpre{e}{\Phi}{\bot}{\bot}{\Phi} \vdash \wpre{\cmdcall e}{\Phi}{\bot}{\bot}{\bot}
+$$
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Proof Rule: Bind}
+
+$$
+\WP\,e\{v.\WP\, K[v] \{\Phi\}\} \vdash \WP\,K[e]\{\Phi\}
+$$
+$$
+\onslide<2->{
+\Downarrow
+}
+$$
+$$
+\onslide<2->{
+\only<2>{
+\begin{aligned}
+  \WP\,e\,& \progspec{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}} \\
+                  & \progspec{v. K \in \pure{\cmdbreak\!} \land \Phi_B(v)} \\
+                  & \progspec{v. K \in \pure{\cmdcontinue} \land \Phi_C(v)} \\
+                  & \progspec{v. K \in \pure{\cmdreturn\!} \land \Phi_R(v)}
+\end{aligned} \vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}
+}
+\onslide<3>{
+\begin{aligned}
+  \WP\,e\,& \progspec{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}} \\
+                  & \progspec{v. \blue{K \in \pure{\cmdbreak\!}} \land \Phi_B(v)} \\
+                  & \progspec{v. \blue{K \in \pure{\cmdcontinue}} \land \Phi_C(v)} \\
+                  & \progspec{v. \blue{K \in \pure{\cmdreturn\!}} \land \Phi_R(v)}
+\end{aligned} \vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}
+}
+}
+$$
+
+\onslide<3>{
+  If \blue{blue} assertions are invalidated, we should use other rules to prove the consequence.
+}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Proof Rule: Sequence}
+
+$$
+\begin{aligned}
+  \WP\,e\,& \progspec{v. \wpre{K[v]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}} \\
+                  & \progspec{v. K \in \pure{\cmdbreak\!} \land \Phi_B(v)} \\
+                  & \progspec{v. K \in \pure{\cmdcontinue} \land \Phi_C(v)} \\
+                  & \progspec{v. K \in \pure{\cmdreturn\!} \land \Phi_R(v)}
+\end{aligned} \vdash \wpre{K[e]}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}
+$$
+$$
+\Downarrow
+$$
+$$
+\begin{aligned}
+  \WP\,e_1\,& \progspec{\_.\wpre{e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}} \\
+                  & \progspec{\Phi_B}\,\progspec{\Phi_C}\,\progspec{\Phi_R}
+\end{aligned} \vdash \wpre{e_1 \cmdseq e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}
+$$
+
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}
+\frametitle{Contextual Local Reasoning}
+  
+\begin{mathpar}
+\inferrule[Hoare-Bind]{
+  \vdash \triple{P}{e}{\Psi} \\ \forall v.\, \triple{\Psi(v)}{K[e]}{\Phi}
+}{
+  \vdash \triple{P}{K[e]}{\Phi}
+}
+\end{mathpar}
+
+\begin{center}
+  Untangle the proof of $e$ and $K$!  
+\end{center}
+  
+\end{frame}
+
+\begin{frame}
+\frametitle{Our Achievement}
+
+\begin{itemize}
+  \item A lambda calculus like language supporting control flow and contextual local reasoning.
+  \item A program logic build on Iris and allowing contextual local reasoning about control flow.
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Compare with Continuation}
+
+$$
+\begin{aligned}
+  (K\big[\text{\blue{call/cc}}(x.\,e)\big], \sigma) &\rightarrow (K\big[e[\mathrm{cont}(K)/x]\big], \sigma) \\
+  (K[\text{\blue{throw} $v$ \blue{to} } \mathrm{cont}(K')], \sigma) &\rightarrow (K'[v], \sigma)
+\end{aligned}
+$$
+
+\begin{mathpar}
+  \inferrule[callcc-wp]{
+    \WP\,K\big[e[\mathrm{cont}(K)/x]\big]\{\Phi\}
+  }{
+    \WP\,K\big[\text{\blue{call/cc}}(x.\,e)\big]\{\Phi\}
+  }
+\end{mathpar}
+
+\end{frame}
+
+\appendix
+
+\begin{frame}{References}
+
+  \bibliography{paper.bib}
+  \bibliographystyle{abbrv}
+
+\end{frame}
+
+\begin{frame}[standout]
+  Questions?
+\end{frame}
+
+
+\begin{frame}{Backup slides}
+
+
+
+\end{frame}
+
+\end{document}
