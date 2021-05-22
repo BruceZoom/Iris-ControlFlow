@@ -3,3 +3,6 @@
 theories/cf_lang/lang.v
 theories/cf_lang/notation.v
 theories/cf_lang/multi_post.v
+theories/throw_lang/lang.v
+theories/throw_lang/notation.v
+theories/throw_lang/multi_post.v
