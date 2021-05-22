@@ -245,7 +245,7 @@ There are 5 cases in total:
 % $$
 
 % The adequacy theorem will have some problem w.r.t the \cmdreturn statement.
-
+    
 \begin{figure}[h]
     $$
     \begin{aligned}
@@ -260,7 +260,7 @@ There are 5 cases in total:
             \land &(v = \false \wand \wpre{e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R})
         \end{aligned} &\vdash \wpre{\cmdif v \cmdthen e_2 \cmdelse e_3}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-if)} \\
         \begin{aligned}
-            \texttt{wp}\,e\,& \progspec{\_.\wpre{e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}} \\
+            \texttt{wp}\,e_1\,& \progspec{\_.\wpre{e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R}} \\
                             & \progspec{\Phi_B}\,\progspec{\Phi_C}\,\progspec{\Phi_R}
         \end{aligned} &\vdash \wpre{e_1 \cmdseq e_2}{\Phi_N}{\Phi_B}{\Phi_C}{\Phi_R} & \textsc{(wp-seq)} \\
         \wpre{e}{\Phi}{\bot}{\bot}{\Phi} &\vdash \wpre{\cmdcall e}{\Phi}{\bot}{\bot}{\bot} & \textsc{(wp-call)} \\
